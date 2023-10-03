@@ -136,8 +136,10 @@ class TagLab(QMainWindow):
 
         current_version, need_to_update = self.checkNewVersion()
         if need_to_update:
-            print("New version available. Please, launch update.py")
-            sys.exit(0)
+            ans.strip() = input("New version available. Do you want to install? [Y/n]")
+            if ans == 'y':
+            	print("Exiting program; please run update.py")
+            	sys.exit(0)
 
         ##### DATA INITIALIZATION AND SETUP #####
 

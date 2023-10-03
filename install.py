@@ -15,6 +15,11 @@ if osused != 'Linux' and osused != 'Windows' and osused != 'Darwin':
 if sys.version_info[0] < 3 or (sys.version_info[0] == 3 and (sys.version_info[1] < 8 or sys.version_info[1] > 10)):
     raise Exception("Python " + sys.version_info[0] + "." + sys.version_info[1] + " not supported. Please see https://github.com/cnr-isti-vclab/TagLab/wiki/Install-TagLab")
 
+# Install NVCC 11.8 first
+conda_command = ["conda", "install", "-c", "nvidia/label/cuda-11.X.8", "cuda-nvcc"]
+# Run the conda command
+subprocess.run(conda_command, check=True)
+
 # manage thorch
 something_wrong_with_nvcc = False
 flag_install_pythorch_cpu = False
@@ -29,7 +34,6 @@ if len(sys.argv)==2 and sys.argv[1]=='cpu':
     flag_install_pythorch_cpu = True
 
 # get nvcc version
-
 if osused == 'Darwin':
     flag_install_pythorch_cpu = True
     print('NVCC not supported on MacOS. Installing cpu version automatically...')
@@ -101,6 +105,12 @@ elif flag_install_pythorch_cpu == False:
         torchvision_package += '==0.14.1+cu117'
         torch_extra_argument1 = '--extra-index-url'
         torch_extra_argument2 = 'https://download.pytorch.org/whl/cu117'
+    elif '11.8' in nvcc_version:
+    	print("Torch 2.0.1 for CUDA 11.8")
+    	torch_package += '==2.0.1+cu118'
+        torchvision_package += '==0.15.1+cu118'
+        torch_extra_argument1 = '--extra-index-url'
+        torch_extra_argument2 = 'https://download.pytorch.org/whl/cu118'
     elif something_wrong_with_nvcc==False:
         # nvcc is installed, but some version that is not supported by torch
         print('nvcc version installed not supported by pytorch!!')
@@ -109,7 +119,7 @@ elif flag_install_pythorch_cpu == False:
     # if the user tried to run the installer but there were issues on finding a supported
     if something_wrong_with_nvcc == True and flag_install_pythorch_cpu == False:
         ans = input('Something is wrong with NVCC. Do you want to install the CPU version of pythorch? [Y/n]')
-        if ans == "Y":
+        if ans.strip() == "Y":
             flag_install_pythorch_cpu = True
         else:
             raise Exception('Installation aborted. Install a proper NVCC version or set the pythorch CPU version.')
@@ -232,7 +242,7 @@ install_requires = [
     'matplotlib',
     'albumentations',
     'shapely',
-    'pycocotools'
+    'pycocotools-windows'
 ]
 
 # if on windows, first install the msvc runtime
@@ -243,17 +253,15 @@ if osused == 'Windows':
 for package in install_requires:
     subprocess.check_call([sys.executable, "-m", "pip", "install", package])
 
-# installing torch, gdal and rasterio
-
 # torch and torchvision
 list_args = [sys.executable, "-m", "pip", "install", torch_package, torchvision_package]
 if torch_extra_argument1 != "":
     list_args.extend([torch_extra_argument1, torch_extra_argument2])
 
+# installing torch, torchvision
 subprocess.check_call(list_args)
 
 # gdal and rasterio
-
 if osused != 'Windows':
     subprocess.check_call([sys.executable, "-m", "pip", "install", gdal_package])
     subprocess.check_call([sys.executable, "-m", "pip", "install", 'rasterio'])
@@ -268,7 +276,7 @@ else:
     filename_rasterio = 'rasterio-' + rasterio_win_version + '-cp' + pythonversion + '-cp' + pythonversion
     filename_gdal += '-win_amd64.whl'
     filename_rasterio += '-win_amd64.whl'
-    base_url_gdal = base_url + 'gdal/' + filename_gdal
+    base_url_gdal = './packages/' + filename_gdal
     base_url_rasterio = base_url + 'rasterio/' + filename_rasterio
 
     rasterio_is_installed = importutil.find_spec("rasterio")
@@ -323,6 +331,10 @@ else:
 
         # delete wheel files
         os.remove(this_directory + '/' + filename_gdal)
+
+# Install numpy
+conda_command = ["conda", "install", "numpy"]
+subprocess.run(conda_command, check=True)
 
 # check for other networks
 print('Downloading networks...')
