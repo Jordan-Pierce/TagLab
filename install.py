@@ -21,11 +21,11 @@ if sys.version_info[0] < 3 or (
 import shutil
 import subprocess
 # Find the path to the conda executable
-conda_executable = shutil.which('conda')
+conda_exe = shutil.which('conda')
 
-if conda_executable:
+if conda_exe:
     # Create a conda command
-    conda_command = [conda_executable, "install", "-c", "nvidia/label/cuda-11.8.0", "cuda-nvcc"]
+    conda_command = [conda_exe, "install", "-c", "nvidia/label/cuda-11.8.0", "cuda-nvcc", "-y"]
 
     # Run the conda command
     subprocess.run(conda_command, check=True)
@@ -364,7 +364,7 @@ else:
         os.remove(this_directory + '/' + filename_gdal)
 
 # Install numpy
-conda_command = ["conda", "install", "numpy"]
+conda_command = [conda_exe, "install", "numpy"]
 subprocess.run(conda_command, check=True)
 
 # check for other networks
