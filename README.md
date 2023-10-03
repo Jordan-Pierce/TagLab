@@ -38,7 +38,7 @@ conda env list
 If it doesn't, create a new conda environment called `taglab` where we will install all the dependencies.
 ```python
 # cmd
-conda create --name tablab python=3.8 -y
+conda create --name taglab python=3.8 -y
 ```
 
 Once this has finished, or it already exists, get into or `activate` the conda environment by typing the following:
