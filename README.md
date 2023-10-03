@@ -9,7 +9,27 @@ Below are the instructions for installing TagLab on AVD. Please read through thi
 First, check that `Anaconda` is installed on your computer; do this by pressing the `Windows` key, and typing `Anaconda`. If the `Anaconda Prompt` is not present, consult with IT about installing 
 [`miniconda`](https://docs.conda.io/projects/miniconda/en/latest/).
 
-Open `Anaconda Prompt` and check to see if a `taglab` environment already exists:
+First, open `Anaconda Prompt` and type in the following; these will add paths to `PATH`:
+```python
+# cmd
+setx PATH "%PATH%;C:\Program Files\Git\bin" /M
+
+setx PATH "%PATH%;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA" /M
+setx PATH "%PATH%;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8" /M
+setx PATH "%PATH%;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8\bin" /M
+setx PATH "%PATH%;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8\lib\x64" /M
+setx PATH "%PATH%;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8\include" /M
+setx PATH "%PATH%;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8\lbnvvp" /M
+
+setx CUDA "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8" /m
+setx CUDA_HOME "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8" /m
+setx CUDA_PATH "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8" /m
+setx CUDA_PATH_V11_8 "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8" /m
+setx CUDA_SMI "C:\Program Files\NVIDIA Corporation\NVSMI" /m
+```
+
+After doing this, you **must close the `Anaconda Prompt` and open another one**! Open `Anaconda 
+Prompt` again and check to see if a `taglab` environment already exists:
 ```python
 # cmd
 conda env list
@@ -45,15 +65,6 @@ If the folder doesn't exist, within the `Code` (or a common directory of your ch
 git clone https://github.com/Jordan-Pierce/TagLab.git
 cd TagLab
 ```
-
-If you get an error indicating that `git` is not a known variable, you need to add it to `PATH`:
-```python
-# cmd
-setx PATH "%PATH%;C:\Program Files\Git\bin" /M
-```
-
-Then, close your command prompt and open it again. Navigate back to the `Code` directory and try
-cloning the repository again.
 
 Now we will install the dependencies needed for `TagLab`:
 ```python

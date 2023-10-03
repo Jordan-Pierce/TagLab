@@ -1,6 +1,7 @@
 import platform
 import sys
 import os
+import shutil
 import subprocess
 from pathlib import Path
 import importlib.util as importutil
@@ -17,9 +18,6 @@ if sys.version_info[0] < 3 or (
     raise Exception("Python " + sys.version_info[0] + "." + sys.version_info[1] +
                     " not supported. Please see https://github.com/cnr-isti-vclab/TagLab/wiki/Install-TagLab")
 
-# Install NVCC 11.8 first
-import shutil
-import subprocess
 # Find the path to the conda executable
 conda_exe = shutil.which('conda')
 
@@ -33,7 +31,7 @@ else:
     print("Conda executable not found. Make sure Conda is installed and in your system's PATH.")
     sys.exit(1)
 
-# manage thorch
+# manage torch
 something_wrong_with_nvcc = False
 flag_install_pythorch_cpu = False
 nvcc_version = ''
@@ -174,6 +172,7 @@ if osused == 'Linux':
         print('GDAL version installed: ' + output)
     else:
         raise Exception('Impossible to access to gdal-config binary.\nInstallation aborted.')
+
     print('Trying to install libxcb-xinerama0...')
     from subprocess import STDOUT, check_call
     import os
@@ -294,54 +293,25 @@ if osused != 'Windows':
     subprocess.check_call([sys.executable, "-m", "pip", "install", 'rasterio'])
 else:
 
-    base_url = 'http://taglab.isti.cnr.it/wheels/'
-    pythonversion = str(sys.version_info[0]) + str(sys.version_info[1])
+    base_url = './packages/'
+    python_v = str(sys.version_info[0]) + str(sys.version_info[1])
+
     # compute rasterio and gdal urls download
-    rasterio_win_version = '1.2.10'
     gdal_win_version = '3.4.3'
-    filename_gdal = 'gdal-' + gdal_win_version + '-cp' + pythonversion + '-cp' + pythonversion
-    filename_rasterio = 'rasterio-' + rasterio_win_version + '-cp' + pythonversion + '-cp' + pythonversion
+    filename_gdal = 'gdal-' + gdal_win_version + '-cp' + python_v + '-cp' + python_v
     filename_gdal += '-win_amd64.whl'
+    base_url_gdal = base_url + filename_gdal
+
+    rasterio_win_version = '1.2.10'
+    filename_rasterio = 'rasterio-' + rasterio_win_version + '-cp' + python_v + '-cp' + python_v
     filename_rasterio += '-win_amd64.whl'
-    base_url_gdal = './packages/' + filename_gdal
-    base_url_rasterio = base_url + 'rasterio/' + filename_rasterio
+    base_url_rasterio = base_url + filename_rasterio
 
     # see if rasterio and gdal are already installed
-    try:
-        rasterio_is_installed = importutil.find_spec("rasterio")
-    except:
-        rasterio_is_installed = None
-
     try:
         gdal_is_installed = importutil.find_spec("osgeo.gdal")
     except:
         gdal_is_installed = None
-
-    # if so, check versions
-    if rasterio_is_installed is not None:
-        import rasterio
-
-        print("RASTERIO ", rasterio.__version__, " is installed. Version ", rasterio_win_version,
-              " is required.")
-    else:
-        # retrieve rasterio from TagLab web site
-        print('GET RASTERIO FROM URL: ' + base_url_rasterio)
-
-        this_directory = path.abspath(path.dirname(__file__))
-        try:
-            slib = 'Rasterio'
-            opener = urllib.request.build_opener()
-            opener.addheaders = [('User-agent', 'Mozilla/5.0')]
-            urllib.request.install_opener(opener)
-            urllib.request.urlretrieve(base_url_rasterio, this_directory + '/' + filename_rasterio)
-        except:
-            raise Exception("Cannot download " + slib + ".")
-
-        # install rasterio
-        subprocess.check_call([sys.executable, "-m", "pip", "install", filename_rasterio])
-
-        # delete wheel files
-        os.remove(this_directory + '/' + filename_rasterio)
 
     if gdal_is_installed is not None:
         import osgeo.gdal
@@ -349,11 +319,29 @@ else:
         print("GDAL ", osgeo.gdal.__version__, " is installed. "
               "Version ", gdal_win_version, "is required.")
     else:
-        # retrieve GDAL from TagLab web site
+        # retrieve GDAL from TagLab website
         print('GET GDAL FROM URL: ' + base_url_gdal)
 
         # install gdal from packages
-        subprocess.check_call([sys.executable, "-m", "pip", "install", filename_gdal])
+        subprocess.check_call([sys.executable, "-m", "pip", "install", base_url_gdal])
+
+    try:
+        rasterio_is_installed = importutil.find_spec("rasterio")
+    except:
+        rasterio_is_installed = None
+
+    # if so, check versions
+    if rasterio_is_installed is not None:
+        import rasterio
+
+        print("RASTERIO ", rasterio.__version__, " is installed. "
+              "Version ", rasterio_win_version, " is required.")
+    else:
+        # retrieve rasterio from TagLab website
+        print('GET RASTERIO FROM URL: ' + base_url_rasterio)
+
+        # install rasterio
+        subprocess.check_call([sys.executable, "-m", "pip", "install", base_url_rasterio])
 
 # Install numpy
 conda_command = [conda_exe, "install", "numpy", "-y"]
