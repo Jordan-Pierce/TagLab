@@ -25,7 +25,7 @@ conda_executable = shutil.which('conda')
 
 if conda_executable:
     # Create a conda command
-    conda_command = [conda_executable, "install", "-c", "nvidia/label/cuda-11.X.0", "cuda-nvcc"]
+    conda_command = [conda_executable, "install", "-c", "nvidia/label/cuda-11.8.0", "cuda-nvcc"]
 
     # Run the conda command
     subprocess.run(conda_command, check=True)
