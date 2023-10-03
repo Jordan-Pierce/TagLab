@@ -39,6 +39,13 @@ This should change the drive you're in from `C:` to `W:`. From here, `change dir
 cd Code\TagLab\
 ```
 
+If the folder doesn't exist, within the `Code` (or a common directory of your choosing), type:
+```python
+# cmd
+git clone https://github.com/Jordan-Pierce/TagLab.git
+cd TagLab
+```
+
 Now we will install the dependencies needed for `TagLab`:
 ```python
 # cmd
