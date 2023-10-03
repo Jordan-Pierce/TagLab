@@ -28,8 +28,8 @@ setx CUDA_PATH_V11_8 "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8" 
 setx CUDA_SMI "C:\Program Files\NVIDIA Corporation\NVSMI" /m
 ```
 
-After doing this, you **must close the `Anaconda Prompt` and open another one**! Open `Anaconda 
-Prompt` again and check to see if a `taglab` environment already exists:
+After doing this, you **must close the `Anaconda Prompt` and open another one**! Open 
+`Anaconda Prompt` again and check to see if a `taglab` environment already exists:
 ```python
 # cmd
 conda env list
