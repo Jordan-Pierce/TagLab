@@ -18,9 +18,20 @@ if sys.version_info[0] < 3 or (
                     " not supported. Please see https://github.com/cnr-isti-vclab/TagLab/wiki/Install-TagLab")
 
 # Install NVCC 11.8 first
-conda_command = ["conda", "install", "-c", "nvidia/label/cuda-11.8.0", "cuda-nvcc"]
-# Run the conda command
-subprocess.run(conda_command, check=True)
+import shutil
+import subprocess
+# Find the path to the conda executable
+conda_executable = shutil.which('conda')
+
+if conda_executable:
+    # Create a conda command
+    conda_command = [conda_executable, "install", "-c", "nvidia/label/cuda-11.X.0", "cuda-nvcc"]
+
+    # Run the conda command
+    subprocess.run(conda_command, check=True)
+else:
+    print("Conda executable not found. Make sure Conda is installed and in your system's PATH.")
+    sys.exit(1)
 
 # manage thorch
 something_wrong_with_nvcc = False
