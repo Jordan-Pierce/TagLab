@@ -12,20 +12,20 @@ First, check that `Anaconda` is installed on your computer; do this by pressing 
 First, open `Anaconda Prompt` and type in the following; these will add paths to `PATH`:
 ```python
 # cmd
-setx PATH "%PATH%;C:\Program Files\Git\bin" /M
+setx PATH "%PATH%;C:\Program Files\Git\bin"
 
-setx PATH "%PATH%;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA" /M
-setx PATH "%PATH%;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8" /M
-setx PATH "%PATH%;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8\bin" /M
-setx PATH "%PATH%;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8\lib\x64" /M
-setx PATH "%PATH%;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8\include" /M
-setx PATH "%PATH%;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8\lbnvvp" /M
+setx PATH "%PATH%;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA"
+setx PATH "%PATH%;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8"
+setx PATH "%PATH%;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8\bin"
+setx PATH "%PATH%;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8\lib\x64"
+setx PATH "%PATH%;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8\include"
+setx PATH "%PATH%;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8\lbnvvp"
 
-setx CUDA "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8" /m
-setx CUDA_HOME "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8" /m
-setx CUDA_PATH "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8" /m
-setx CUDA_PATH_V11_8 "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8" /m
-setx CUDA_SMI "C:\Program Files\NVIDIA Corporation\NVSMI" /m
+setx CUDA "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8"
+setx CUDA_HOME "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8"
+setx CUDA_PATH "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8"
+setx CUDA_PATH_V11_8 "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8"
+setx CUDA_SMI "C:\Program Files\NVIDIA Corporation\NVSMI"
 ```
 
 After doing this, you **must close the `Anaconda Prompt` and open another one**! Open 
