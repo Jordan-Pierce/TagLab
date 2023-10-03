@@ -2,9 +2,56 @@
 
 | &nbsp; [Software Requirements](#software-requirements) &nbsp; | &nbsp; [Install](#installing-taglab) &nbsp; | &nbsp; [Update](#updating-taglab) &nbsp; | &nbsp; [Citation](#citation) &nbsp; |
 
-## PostDoc position!
+## NOAA Install
 
-Dear TagLab community, we are looking for a Post-doc researcher The grant duration is two years; starting from **September, 2023**, candidates will work at the [Visual Computing Lab](https://vcg.isti.cnr.it) at [ISTI-CNR](https://www.isti.cnr.it) in Pisa, Italy, please contact us for more info.
+Below are the instructions for installing TagLab on AVD. Please read through this first, and then perform each action as instructed.
+
+First, check that `Anaconda` is installed on your computer; do this by pressing the `Windows` key, and typing `Anaconda`. If the `Anaconda Prompt` is not present, consult with IT about installing 
+[`miniconda`](https://docs.conda.io/projects/miniconda/en/latest/).
+
+Open `Anaconda Prompt` and check to see if a `taglab` environment already exists:
+```python
+# cmd
+conda env list
+```
+
+If it doesn't, create a new conda environment called `taglab` where we will install all the dependencies.
+```python
+# cmd
+conda create --name tablab python=3.8 
+```
+
+Once this has finished, or it already exists, get into or `activate` the conda environment by typing the following:
+```python
+# cmd
+conda activate taglab
+```
+
+This should change your `cmd` from `(base)` to `(taglab)`; if it doesn't, do not proceed and consult with Jordan. Now we navigate to the `W:` drive, by typing in the following:
+```python
+# cmd
+W:
+```
+
+This should change the drive you're in from `C:` to `W:`. From here, `change directories` to be inside the `TagLab` folder:
+```python
+# cmd
+cd Code\TagLab\
+```
+
+Now we will install the dependencies needed for `TagLab`:
+```python
+# cmd
+python install.py
+```
+
+Once this has finished, you can run `TagLab`:
+```python
+# cmd
+python TagLab.py
+```
+
+If you have issues installing, or getting `TagLab` to run, contact Jordan.
 
 ## Introduction
 
