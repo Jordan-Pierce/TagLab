@@ -356,7 +356,7 @@ else:
         subprocess.check_call([sys.executable, "-m", "pip", "install", filename_gdal])
 
 # Install numpy
-conda_command = [conda_exe, "install", "numpy"]
+conda_command = [conda_exe, "install", "numpy", "-y"]
 subprocess.run(conda_command, check=True)
 
 # check for other networks

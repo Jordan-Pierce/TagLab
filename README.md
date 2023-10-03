@@ -46,6 +46,15 @@ git clone https://github.com/Jordan-Pierce/TagLab.git
 cd TagLab
 ```
 
+If you get an error indicating that `git` is not a known variable, you need to add it to `PATH`:
+```python
+# cmd
+setx PATH "%PATH%;C:\Program Files\Git\bin" /M
+```
+
+Then, close your command prompt and open it again. Navigate back to the `Code` directory and try
+cloning the repository again.
+
 Now we will install the dependencies needed for `TagLab`:
 ```python
 # cmd
