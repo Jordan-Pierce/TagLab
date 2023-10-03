@@ -118,8 +118,8 @@ elif not flag_install_pythorch_cpu:
         torch_extra_argument1 = '--extra-index-url'
         torch_extra_argument2 = 'https://download.pytorch.org/whl/cu117'
     elif '11.8' in nvcc_version:
-        print("Torch 2.0.1 for CUDA 11.8")
-        torch_package += '==2.0.1+cu118'
+        print("Torch 2.0.0 for CUDA 11.8")
+        torch_package += '==2.0.0+cu118'
         torchvision_package += '==0.15.1+cu118'
         torch_extra_argument1 = '--extra-index-url'
         torch_extra_argument2 = 'https://download.pytorch.org/whl/cu118'
