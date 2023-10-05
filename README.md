@@ -6,7 +6,8 @@
 
 Below are the instructions for installing TagLab on AVD. Please read through this first, and then perform each action as instructed.
 
-First, check that `Anaconda` is installed on your computer; do this by pressing the `Windows` key, and typing `Anaconda`. If the `Anaconda Prompt` is not present, consult with IT about installing 
+First, check that `Anaconda` is installed on your computer; do this by pressing the `Windows` key, and typing 
+`Anaconda`. If the `Anaconda Prompt` is not present, consult with IT about installing 
 [`miniconda`](https://docs.conda.io/projects/miniconda/en/latest/).
 
 Open `Anaconda Prompt` and check to see if a `taglab` environment already exists:
@@ -27,13 +28,15 @@ Once this has finished, or it already exists, get into or `activate` the conda e
 conda activate taglab
 ```
 
-This should change your `cmd` from `(base)` to `(taglab)`; if it doesn't, do not proceed and consult with Jordan. Now we navigate to the `W:` drive, by typing in the following:
+This should change your `cmd` from `(base)` to `(taglab)`; if it doesn't, do not proceed and consult with Jordan. 
+Now we navigate to the `W:` drive, by typing in the following:
 ```python
 # cmd
 W:
 ```
 
-This should change the drive you're in from `C:` to `W:`. From here, `change directories` to be inside the `TagLab` folder:
+This should change the drive you're in from `C:` to `W:`. From here, `change directories` to be inside the 
+`TagLab` folder:
 ```python
 # cmd
 cd Code\TagLab\
@@ -50,6 +53,9 @@ Now we will install the dependencies needed for `TagLab`:
 ```python
 # cmd
 python install.py
+
+# or with cpu if cuda is not installed
+python install.py cpu
 ```
 
 Once this has finished, you can run `TagLab`:
