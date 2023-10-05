@@ -28,6 +28,8 @@ torch_package = 'torch'
 torchvision_package = 'torchvision'
 torch_extra_argument1 = ''
 torch_extra_argument2 = ''
+# Windows CUDA path, since nvcc --version is unreliable
+cuda_path = r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA"
 
 # if the user wants to install cpu torch
 if len(sys.argv) == 2 and sys.argv[1] == 'cpu':
@@ -40,8 +42,13 @@ if osused == 'Darwin':
     print('NVCC not supported on MacOS. Installing cpu version automatically...')
 
 elif not flag_install_pythorch_cpu:
-    # For Windows, find CUDA in Program Files
-    cuda_path = r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA"
+
+    # Check that cuda is in program files
+    if not os.path.exists(cuda_path):
+        print(f"Could not find {cuda_path}; if CUDA is not installed, use 'cpu' with install.py instead")
+        sys.exit(1)
+
+    # For Windows, find CUDA versions in Program Files
     cuda_versions = os.listdir(cuda_path)
 
     # Find the newest version
