@@ -45,7 +45,8 @@ elif not flag_install_pythorch_cpu:
 
     # Check that cuda is in program files
     if not os.path.exists(cuda_path):
-        print(f"Could not find {cuda_path}; if CUDA is not installed, use 'cpu' with install.py instead")
+        print(f"Could not find {cuda_path}")
+        print("If CUDA is not installed, use: 'python install.py cpu' instead")
         sys.exit(1)
 
     # For Windows, find CUDA versions in Program Files
