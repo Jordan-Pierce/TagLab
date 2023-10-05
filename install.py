@@ -139,7 +139,7 @@ elif not flag_install_pythorch_cpu:
     if something_wrong_with_nvcc == True and flag_install_pythorch_cpu == False:
         ans = input('Something is wrong with NVCC. '
                     'Do you want to install the CPU version of pytorch? [Y/n]')
-        if ans.lower().strip() == "Y":
+        if ans.lower().strip() == "y":
             flag_install_pythorch_cpu = True
         else:
             raise Exception('Installation aborted. '
