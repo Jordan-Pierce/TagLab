@@ -283,9 +283,10 @@ install_requires = [
 if osused == 'Windows':
     install_requires.insert(0, 'msvc-runtime')
 
-if osused == 'Windows' and float(python_v) < 3.9:
+if osused == 'Windows' and python_sub_v < 9:
     install_requires.append('pycocotools-windows')
 else:
+    # jesus, take the wheel
     install_requires.append('pycocotools')
 
 # installing all the packages
@@ -299,7 +300,7 @@ for package in install_requires:
 
         if "pycocotools" in e:
             print(f"The error came from installing {install_requires[-1]}")
-            print(f"If you're not already, please use a conda environment with python 3.8")
+            print(f"If you're not already, please try using a conda environment with python 3.8")
 
         sys.exit(1)
 
