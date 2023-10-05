@@ -1,12 +1,14 @@
-import platform
-import sys
 import os
+import sys
 import shutil
+import platform
 import subprocess
 from pathlib import Path
 import importlib.util as importutil
-from os import path
 import urllib.request
+
+import re
+
 
 osused = platform.system()
 if osused != 'Linux' and osused != 'Windows' and osused != 'Darwin':
@@ -44,25 +46,24 @@ elif not flag_install_pythorch_cpu:
 
     # Find the newest version
     if cuda_versions:
-        nvcc_version =
+        nvcc_version = re.sub(r'[a-zA-Z]', '', max(cuda_versions))
 
-    result = subprocess.getstatusoutput('nvcc --version')
-    output = result[1]
-    rc = result[0]
-    if rc == 0:
-        pos = output.find('release')
-        cont = True
-        if pos >= 0:
-            pos += 8
-            nvcc_version = output[pos:pos + 4]
-            print('Found NVCC version: ' + nvcc_version)
+        # Install NVCC using conda
+        conda_exe = shutil.which('conda')
+
+        if conda_exe:
+            # Create a conda command
+            conda_command = [conda_exe, "install", "-c", f"nvidia/label/cuda-{nvcc_version}.0", "cuda-nvcc", "-y"]
+
+            # Run the conda command
+            subprocess.run(conda_command, check=True)
         else:
-            raise Exception('Could not read NVCC version.\nInstallation aborted.')
+            print("Conda executable not found. Make sure Conda is installed and in your system's PATH.")
+            sys.exit(1)
     else:
-        print('Impossible to run "nvcc --version" command. CUDA seems to be not installed.')
-        something_wrong_with_nvcc = True  # remember that we had issues on finding nvcc
+        something_wrong_with_nvcc = True
 
-    # get nvcc version
+    # Install pytorch using nvcc version
     if '9.2' in nvcc_version:
         nvcc_version = '9.2'
         print('Torch 1.7.1 for CUDA 9.2')
@@ -112,16 +113,12 @@ elif not flag_install_pythorch_cpu:
         torchvision_package += '==0.14.1+cu117'
         torch_extra_argument1 = '--extra-index-url'
         torch_extra_argument2 = 'https://download.pytorch.org/whl/cu117'
-    elif '11.8' in nvcc_version:
+    elif '11.8' in nvcc_version or (nvcc_version and not something_wrong_with_nvcc):
         print("Torch 2.0.0 for CUDA 11.8")
         torch_package += '==2.0.0+cu118'
         torchvision_package += '==0.15.1+cu118'
         torch_extra_argument1 = '--extra-index-url'
         torch_extra_argument2 = 'https://download.pytorch.org/whl/cu118'
-    elif something_wrong_with_nvcc == False:
-        # nvcc is installed, but some version that is not supported by torch
-        print('nvcc version installed not supported by pytorch!!')
-        something_wrong_with_nvcc = True  # remember that we had issues on finding nvcc
 
     # if the user tried to run the installer but there were issues on finding a supported
     if something_wrong_with_nvcc == True and flag_install_pythorch_cpu == False:
@@ -265,12 +262,14 @@ install_requires = [
     'matplotlib',
     'albumentations',
     'shapely',
-    'pycocotools-windows'
 ]
 
-# if on windows, first install the msvc runtime
+# if on windows, first install the msvc runtime, pycocotools
 if osused == 'Windows':
     install_requires.insert(0, 'msvc-runtime')
+    install_requires.append('pycocotools-windows')
+else:
+    install_requires.append('pycocotools')
 
 # installing all the packages
 for package in install_requires:
@@ -299,10 +298,16 @@ else:
     filename_gdal += '-win_amd64.whl'
     base_url_gdal = base_url + filename_gdal
 
+    if not os.path.exists(base_url_gdal):
+        raise Exception(f"Could not find {base_url_gdal}; aborting")
+
     rasterio_win_version = '1.2.10'
     filename_rasterio = 'rasterio-' + rasterio_win_version + '-cp' + python_v + '-cp' + python_v
     filename_rasterio += '-win_amd64.whl'
     base_url_rasterio = base_url + filename_rasterio
+
+    if not os.path.exists(base_url_rasterio):
+        raise Exception(f"Could not find {base_url_rasterio}; aborting")
 
     # see if rasterio and gdal are already installed
     try:
