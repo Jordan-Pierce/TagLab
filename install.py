@@ -14,12 +14,12 @@ if osused != 'Linux' and osused != 'Windows' and osused != 'Darwin':
     raise Exception("Operative System not supported")
 
 # Python version
-python_v = f"{sys.version_info[0]}.{sys.version_info[1]}"
+python_v = f"{sys.version_info[0]}{sys.version_info[1]}"
 python_sub_v = int(sys.version_info[1])
 
 # check python version
 if python_sub_v < 8 or python_sub_v > 10:
-    raise Exception(f"Python {python_v} not supported. "
+    raise Exception(f"Python 3.{python_sub_v} not supported. "
                     f"Please see https://github.com/cnr-isti-vclab/TagLab/wiki/Install-TagLab")
 
 # manage torch
