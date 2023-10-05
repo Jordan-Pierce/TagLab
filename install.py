@@ -18,19 +18,6 @@ if sys.version_info[0] < 3 or (
     raise Exception("Python " + sys.version_info[0] + "." + sys.version_info[1] +
                     " not supported. Please see https://github.com/cnr-isti-vclab/TagLab/wiki/Install-TagLab")
 
-# Find the path to the conda executable
-conda_exe = shutil.which('conda')
-
-if conda_exe:
-    # Create a conda command
-    conda_command = [conda_exe, "install", "-c", "nvidia/label/cuda-11.8.0", "cuda-nvcc", "-y"]
-
-    # Run the conda command
-    subprocess.run(conda_command, check=True)
-else:
-    print("Conda executable not found. Make sure Conda is installed and in your system's PATH.")
-    sys.exit(1)
-
 # manage torch
 something_wrong_with_nvcc = False
 flag_install_pythorch_cpu = False
@@ -46,9 +33,19 @@ if len(sys.argv) == 2 and sys.argv[1] == 'cpu':
 
 # get nvcc version
 if osused == 'Darwin':
+    # For Mac, use CPU
     flag_install_pythorch_cpu = True
     print('NVCC not supported on MacOS. Installing cpu version automatically...')
+
 elif not flag_install_pythorch_cpu:
+    # For Windows, find CUDA in Program Files
+    cuda_path = r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA"
+    cuda_versions = os.listdir(cuda_path)
+
+    # Find the newest version
+    if cuda_versions:
+        nvcc_version =
+
     result = subprocess.getstatusoutput('nvcc --version')
     output = result[1]
     rc = result[0]
@@ -130,7 +127,7 @@ elif not flag_install_pythorch_cpu:
     if something_wrong_with_nvcc == True and flag_install_pythorch_cpu == False:
         ans = input('Something is wrong with NVCC. '
                     'Do you want to install the CPU version of pytorch? [Y/n]')
-        if ans.strip() == "Y":
+        if ans.lower().strip() == "Y":
             flag_install_pythorch_cpu = True
         else:
             raise Exception('Installation aborted. '
