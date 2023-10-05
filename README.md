@@ -4,7 +4,8 @@
 
 ## NOAA Install
 
-Below are the instructions for installing TagLab on AVD. Please read through this first, and then perform each action as instructed.
+Below are the instructions for installing TagLab on a `Windows` machine. 
+Please read through this first, and then perform each action as instructed.
 
 First, check that `Anaconda` is installed on your computer; do this by pressing the `Windows` key, and typing 
 `Anaconda`. If the `Anaconda Prompt` is not present, consult with IT about installing 
@@ -29,27 +30,25 @@ conda activate taglab
 ```
 
 This should change your `cmd` from `(base)` to `(taglab)`; if it doesn't, do not proceed and consult with Jordan. 
-Now we navigate to the `W:` drive, by typing in the following:
+Now we need to navigate to the folder that already has this `TagLab` repository, or where you would like to put it: 
 ```python
 # cmd
+
+# If you want to change drives, enter the drive letter
 W:
-```
 
-This should change the drive you're in from `C:` to `W:`. From here, `change directories` to be inside the 
-`TagLab` folder:
-```python
-# cmd
-cd Code\TagLab\
-```
+# If you want to change directories, use cd
+cd Documents\Code\TagLab
 
-If the folder doesn't exist, within the `Code` (or a common directory of your choosing), type:
-```python
-# cmd
+# If this TagLab repository isn't already downloaded, use git to clone it
 git clone https://github.com/Jordan-Pierce/TagLab.git
 cd TagLab
+
+# Or download it from GitHub, and unzip the folder, and cd inside of it
+cd Documents\Code\taglab-main
 ```
 
-Now we will install the dependencies needed for `TagLab`:
+After `TagLab` is downloaded, we will install the dependencies needed using the modified `install.py` script:
 ```python
 # cmd
 python install.py
