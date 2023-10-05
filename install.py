@@ -374,8 +374,8 @@ else:
         subprocess.check_call([sys.executable, "-m", "pip", "install", base_url_rasterio])
 
 # Install numpy
-conda_command = [conda_exe, "install", "numpy", "-y"]
-subprocess.run(conda_command, check=True)
+command = [sys.executable, "-m", "pip", "install", "numpy"]
+subprocess.run(command, check=True)
 
 # check for other networks
 print('Downloading networks...')
