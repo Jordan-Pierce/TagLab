@@ -45,7 +45,7 @@ git clone https://github.com/Jordan-Pierce/TagLab.git
 cd TagLab
 
 # Or download it from GitHub, and unzip the folder, and cd inside of it
-cd Documents\Code\taglab-main
+cd Documents\Code\TagLab-main
 ```
 
 After `TagLab` is downloaded, we will install the dependencies needed using the modified `install.py` script:
