@@ -14,11 +14,13 @@ osused = platform.system()
 if osused != 'Linux' and osused != 'Windows' and osused != 'Darwin':
     raise Exception("Operative System not supported")
 
+# Python version
+python_v = str(sys.version_info[0]) + str(sys.version_info[1])
+
 # check python version
-if sys.version_info[0] < 3 or (
-        sys.version_info[0] == 3 and (sys.version_info[1] < 8 or sys.version_info[1] > 10)):
-    raise Exception("Python " + sys.version_info[0] + "." + sys.version_info[1] +
-                    " not supported. Please see https://github.com/cnr-isti-vclab/TagLab/wiki/Install-TagLab")
+if not 3.8 <= float(python_v) <= 3.10:
+    raise Exception(f"Python {python_v} not supported. "
+                    f"Please see https://github.com/cnr-isti-vclab/TagLab/wiki/Install-TagLab")
 
 # manage torch
 something_wrong_with_nvcc = False
@@ -28,6 +30,7 @@ torch_package = 'torch'
 torchvision_package = 'torchvision'
 torch_extra_argument1 = ''
 torch_extra_argument2 = ''
+
 # Windows CUDA path, since nvcc --version is unreliable
 cuda_path = r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA"
 
@@ -121,12 +124,16 @@ elif not flag_install_pythorch_cpu:
         torchvision_package += '==0.14.1+cu117'
         torch_extra_argument1 = '--extra-index-url'
         torch_extra_argument2 = 'https://download.pytorch.org/whl/cu117'
-    elif '11.8' in nvcc_version or (nvcc_version and not something_wrong_with_nvcc):
+    elif '11.8' in nvcc_version:
         print("Torch 2.0.0 for CUDA 11.8")
         torch_package += '==2.0.0+cu118'
         torchvision_package += '==0.15.1+cu118'
         torch_extra_argument1 = '--extra-index-url'
         torch_extra_argument2 = 'https://download.pytorch.org/whl/cu118'
+    elif '12.1' in nvcc_version or (nvcc_version and not something_wrong_with_nvcc):
+        print("Torch 2.1.0 for CUDA")
+        torch_extra_argument1 = '--index-url'
+        torch_extra_argument2 = 'https://download.pytorch.org/whl/cu121'
 
     # if the user tried to run the installer but there were issues on finding a supported
     if something_wrong_with_nvcc == True and flag_install_pythorch_cpu == False:
@@ -275,13 +282,27 @@ install_requires = [
 # if on windows, first install the msvc runtime, pycocotools
 if osused == 'Windows':
     install_requires.insert(0, 'msvc-runtime')
+
+if osused == 'Windows' and float(python_v) < 3.9:
     install_requires.append('pycocotools-windows')
 else:
     install_requires.append('pycocotools')
 
 # installing all the packages
 for package in install_requires:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+
+    except Exception as e:
+        print(f"There was an issue installing the necessary packages.\n{e}")
+
+        if "pycocotools" in e:
+            print(f"The error came from installing {install_requires[-1]}")
+            print(f"If you're not already, please use a conda environment with python 3.8")
+
+        sys.exit(1)
+
 
 # torch and torchvision
 list_args = [sys.executable, "-m", "pip", "install", torch_package, torchvision_package]
@@ -296,10 +317,8 @@ if osused != 'Windows':
     subprocess.check_call([sys.executable, "-m", "pip", "install", gdal_package])
     subprocess.check_call([sys.executable, "-m", "pip", "install", 'rasterio'])
 else:
-
+    # Locally stored wheels
     base_url = './packages/'
-    python_v = str(sys.version_info[0]) + str(sys.version_info[1])
-
     # compute rasterio and gdal urls download
     gdal_win_version = '3.4.3'
     filename_gdal = 'gdal-' + gdal_win_version + '-cp' + python_v + '-cp' + python_v
