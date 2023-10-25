@@ -140,7 +140,6 @@ class Annotation(QObject):
             if region.area > area_th:
 
                 blob = Blob(region, map_pos_x, map_pos_y, self.getFreeId())
-
                 last_blobs_added.append(blob)
 
         return last_blobs_added

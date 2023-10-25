@@ -233,33 +233,27 @@ class TagLab(QMainWindow):
         # self.btnSplitBlob   = self.newButton("split.png",    "Split Blob",            flatbuttonstyle1, self.splitBlob)
 
         self.btnRuler = self.newButton("ruler.png", "Measure tool", flatbuttonstyle1, self.ruler)
-        self.btnDeepExtreme = self.newButton("dexter.png", "4-clicks segmentation",
-                                             flatbuttonstyle2, self.deepExtreme)
-        self.btnRitm = self.newButton("ritm.png", "Positive/negative clicks segmentation",
-                                      flatbuttonstyle2, self.ritm)
-        self.btnAutoClassification = self.newButton("auto.png", "Fully auto semantic segmentation",
-                                                    flatbuttonstyle2, self.selectClassifier)
+        self.btnDeepExtreme = self.newButton("dexter.png", "4-clicks segmentation", flatbuttonstyle2, self.deepExtreme)
+        self.btnRitm = self.newButton("ritm.png", "Positive/negative clicks segmentation", flatbuttonstyle2, self.ritm)
+        self.btnAutoClassification = self.newButton("auto.png", "Fully auto semantic segmentation", flatbuttonstyle2, self.selectClassifier)
+
+        # Jordan
+        self.btnSAMPredictor = self.newButton("meta.png", "SAM Predictor", flatbuttonstyle2, self.samPredictor)
 
         # Split Screen operation removed from the toolbar
-        self.pxmapSeparator = QPixmap(
-            os.path.join(os.path.join(self.taglab_dir, "icons"), "separator.png"))
+        self.pxmapSeparator = QPixmap( os.path.join(os.path.join(self.taglab_dir, "icons"), "separator.png"))
         self.labelSeparator = QLabel()
         self.labelSeparator.setPixmap(self.pxmapSeparator.scaled(QSize(35, 30)))
-        self.btnCreateGrid = self.newButton("grid.png", "Create grid", flatbuttonstyle1,
-                                            self.createGrid)
-        self.btnGrid = self.newButton("grid-edit.png", "Active/disactive grid operations",
-                                      flatbuttonstyle1, self.toggleGrid)
-        self.pxmapSeparator2 = QPixmap(
-            os.path.join(os.path.join(self.taglab_dir, "icons"), "separator.png"))
+        self.btnCreateGrid = self.newButton("grid.png", "Create grid", flatbuttonstyle1, self.createGrid)
+        self.btnGrid = self.newButton("grid-edit.png", "Active/disactive grid operations", flatbuttonstyle1,
+                                      self.toggleGrid)
+        self.pxmapSeparator2 = QPixmap(os.path.join(os.path.join(self.taglab_dir, "icons"), "separator.png"))
         self.labelSeparator2 = QLabel()
         self.labelSeparator2.setPixmap(self.pxmapSeparator2.scaled(QSize(35, 30)))
 
-        self.btnSplitScreen = self.newButton("split.png", "Split screen", flatbuttonstyle1,
-                                             self.toggleComparison)
-        self.btnAutoMatch = self.newButton("automatch.png", "Compute automatic matches",
-                                           flatbuttonstyle1, self.autoCorrespondences)
-        self.btnMatch = self.newButton("manualmatch.png", "Add manual matches ", flatbuttonstyle1,
-                                       self.matchTool)
+        self.btnSplitScreen = self.newButton("split.png", "Split screen", flatbuttonstyle1, self.toggleComparison)
+        self.btnAutoMatch = self.newButton("automatch.png", "Compute automatic matches", flatbuttonstyle1, self.autoCorrespondences)
+        self.btnMatch = self.newButton("manualmatch.png", "Add manual matches ", flatbuttonstyle1, self.matchTool)
 
         # NOTE: Automatic matches button is not checkable
         self.btnAutoMatch.setCheckable(False)
@@ -279,6 +273,9 @@ class TagLab(QMainWindow):
         # layout_tools.addWidget(self.btnSplitBlob)
         layout_tools.addWidget(self.btnRuler)
         layout_tools.addWidget(self.btnAutoClassification)
+        # Jordan
+        layout_tools.addWidget(self.btnSAMPredictor)
+
         layout_tools.addSpacing(3)
         layout_tools.addWidget(self.labelSeparator)
         layout_tools.addSpacing(3)
@@ -626,6 +623,9 @@ class TagLab(QMainWindow):
         # NETWORKS
         self.deepextreme_net = None
         self.classifier = None
+
+        # Jordan
+        self.sampredictor_net = None
 
         # a dirty trick to adjust all the size..
         self.showMinimized()
@@ -1604,8 +1604,8 @@ class TagLab(QMainWindow):
             self.deleteSelectedBlobs()
 
         elif event.key() == Qt.Key_X:
-
-            pass
+            # ACTIVATE "SAM Predictor" TOOL
+            self.samPredictor()
 
         elif event.key() == Qt.Key_B:
             self.attachBoundaries()
@@ -2349,6 +2349,9 @@ class TagLab(QMainWindow):
         self.btnGrid.setChecked(False)
         self.btnMatch.setChecked(False)
         self.btnAutoClassification.setChecked(False)
+        # Jordan
+        self.btnSAMPredictor.setChecked(False)
+
         if self.scale_widget is not None:
             self.scale_widget.close()
             self.scale_widget = None
@@ -2366,7 +2369,9 @@ class TagLab(QMainWindow):
             "RULER": ["Ruler", self.btnRuler],
             "DEEPEXTREME": ["4-click", self.btnDeepExtreme],
             "MATCH": ["Match", self.btnMatch],
-            "RITM": ["Ritm", self.btnRitm]
+            "RITM": ["Ritm", self.btnRitm],
+            # Jordan
+            "SAMPREDICTOR": ["SAM", self.btnSAMPredictor]
         }
         newtool = tools[tool]
         self.resetToolbar()
@@ -2481,6 +2486,15 @@ class TagLab(QMainWindow):
         extreme of the corals and confirm the points by pressing SPACE.
         """
         self.setTool("DEEPEXTREME")
+
+    # Jordan
+    @pyqtSlot()
+    def samPredictor(self):
+        """
+        Activate the "SAM Predictor" tool. The segmentation is performed by selecting four points at the
+        extreme of the corals and confirm the points by pressing SPACE.
+        """
+        self.setTool("SAMPREDICTOR")
 
     @pyqtSlot()
     def ritm(self):
@@ -3339,7 +3353,10 @@ class TagLab(QMainWindow):
                        self.btnFreehand,
                        self.btnCreateCrack, self.btnWatershed, self.btnBricksSegmentation,
                        self.btnRuler, self.btnDeepExtreme,
-                       self.btnRitm, self.btnAutoClassification, self.btnCreateGrid, self.btnGrid]:
+                       self.btnRitm, self.btnAutoClassification, self.btnCreateGrid, self.btnGrid,
+                       # Jordan
+                       self.btnSAMPredictor]:
+
             button.setEnabled(len(self.project.images) > 0)
 
         for button in [self.btnSplitScreen, self.btnAutoMatch, self.btnMatch]:
@@ -4435,6 +4452,11 @@ class TagLab(QMainWindow):
         if self.classifier is not None:
             del self.classifier
             self.classifier = None
+
+        # Jordan
+        if self.sampredictor_net is not None:
+            del self.sampredictor_net
+            self.sampredictor_net = None
 
     @pyqtSlot()
     def selectClassifier(self):

@@ -639,7 +639,9 @@ class QtImageViewerPlus(QtImageViewer):
 
         self.tools.setTool(tool)
 
-        if tool in ["FREEHAND", "RULER", "DEEPEXTREME"] or (tool in ["CUT", "EDITBORDER", "RITM"] and len(self.selected_blobs) > 1):
+        # Jordan
+        if tool in ["FREEHAND", "RULER", "DEEPEXTREME", "SAMPREDICTOR"] or \
+                (tool in ["CUT", "EDITBORDER", "RITM"] and len(self.selected_blobs) > 1):
             self.resetSelection()
 
         if tool == "RITM":
@@ -660,13 +662,14 @@ class QtImageViewerPlus(QtImageViewer):
                 lbl = Label("", "", fill=[0, 0, 0])
                 self.tools.tools["WATERSHED"].setActiveLabel(lbl)
 
-        if tool == "DEEPEXTREME":
+        # Jordan
+        if tool in ["DEEPEXTREME", "SAMPREDICTOR"]:
             self.showCrossair = True
         else:
             self.showCrossair = False
 
         # WHEN panning is active or not
-        if tool == "MOVE" or tool == "MATCH" or tool == "DEEPEXTREME" or tool == "RITM":
+        if tool in ["MOVE", "MATCH", "DEEPEXTREME", "RITM", "SAMPREDICTOR"]:
             self.enablePan()
         else:
             self.disablePan()  # in this case, it is possible to PAN only moving the mouse and pressing the CTRL key
@@ -675,7 +678,8 @@ class QtImageViewerPlus(QtImageViewer):
 
         self.tools.resetTools()
 
-        if self.tools.tool == "DEEPEXTREME":
+        # Jordan
+        if self.tools.tool in ["DEEPEXTREME", "SAMPREDICTOR"]:
             self.showCrossair = True
         else:
             self.showCrossair = False
@@ -706,7 +710,7 @@ class QtImageViewerPlus(QtImageViewer):
                 self.addToSelectedList(selected_blob)
                 self.updateInfoPanel.emit(selected_blob)
 
-        #if len(self.selected_blobs) == 1:
+        # if len(self.selected_blobs) == 1:
         self.newSelection.emit()
         self.logfile.info("[SELECTION][DOUBLE-CLICK] Selection ends.")
 
@@ -744,7 +748,9 @@ class QtImageViewerPlus(QtImageViewer):
             #used from area selection and pen drawing,
             if (self.panEnabled and not (mods & Qt.ShiftModifier)) or (mods & Qt.ControlModifier):
                 self.setDragMode(QGraphicsView.ScrollHandDrag)
-            elif self.tools.tool == "MATCH" or self.tools.tool == "RITM" or self.tools.tool == "DEEPEXTREME":
+
+            # Jordan
+            elif self.tools.tool in ["MATCH", "RITM", "DEEPEXTREME", "SAMPREDICTOR"]:
                 self.tools.leftPressed(x, y, mods)
 
             elif mods & Qt.ShiftModifier:
@@ -897,7 +903,6 @@ class QtImageViewerPlus(QtImageViewer):
             txt = "{:.1f} cm".format(cute_length / 10.0)
         if cute_length >= 1000.0:
             txt = "{:.1f} m".format(cute_length / 1000.0)
-
 
         posx = int(w - length_in_pixel - 20)
         posy = int(h * 0.95)
@@ -1090,9 +1095,7 @@ class QtImageViewerPlus(QtImageViewer):
         self.selectionChanged.emit()
         self.selectionReset.emit()
 
-
-
-#CREATION and DESTRUCTION of BLOBS
+# CREATION and DESTRUCTION of BLOBS
     def addBlob(self, blob, selected = False):
         """
         The only function to add annotations. will take care of undo and QGraphicItems.

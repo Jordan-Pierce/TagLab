@@ -54,6 +54,7 @@ def crop2fullmask(crop_mask, bbox, im=None, im_size=None, zero_pad=False, relax=
         crop_mask = sk_resize(crop_mask, (bbox[3] - bbox[1] + 1, bbox[2] - bbox[0] + 1), order=0, mode='constant').astype(crop_mask.dtype)
     else:
         crop_mask = cv2.resize(crop_mask, (bbox[2] - bbox[0] + 1, bbox[3] - bbox[1] + 1), interpolation=interpolation)
+
     result_ = np.zeros(im_si)
     result_[bbox_valid[1]:bbox_valid[3] + 1, bbox_valid[0]:bbox_valid[2] + 1] = \
         crop_mask[inds[1]:inds[3] + 1, inds[0]:inds[2] + 1]
