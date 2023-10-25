@@ -92,21 +92,25 @@ class SAMPredictor(Tool):
         # load network if necessary
         self.loadNetwork()
 
-        pad = 50
+        factor = 2
+        pad = 50 * factor
+        pad_extreme = 100 * factor
+        box = pad_extreme * 2 * factor
+        resize_to = 512 * factor
 
         point = self.pick_points.points[0].tolist()
-        extreme_points_to_use = np.array([[point[0] - 200, point[1] - 200],
-                                          [point[0] - 200, point[1] + 200],
-                                          [point[0] + 200, point[1] - 200],
-                                          [point[0] + 200, point[1] + 200]])
-        pad_extreme = 100
+        extreme_points_to_use = np.array([[point[0] - box, point[1] - box],
+                                          [point[0] - box, point[1] + box],
+                                          [point[0] + box, point[1] - box],
+                                          [point[0] + box, point[1] + box]])
 
         left_map_pos = extreme_points_to_use[:, 0].min() - pad_extreme
         top_map_pos = extreme_points_to_use[:, 1].min() - pad_extreme
 
         width_extreme_points = extreme_points_to_use[:, 0].max() - extreme_points_to_use[:, 0].min()
         height_extreme_points = extreme_points_to_use[:, 1].max() - extreme_points_to_use[:, 1].min()
-        area_extreme_points = (width_extreme_points * height_extreme_points) / 4
+        area_extreme_points = ((width_extreme_points * height_extreme_points) / 10)
+        area_extreme_points = 1000
 
         (img, extreme_points_new) = self.prepareForSAMPredictor(extreme_points_to_use, pad_extreme)
 
@@ -117,17 +121,20 @@ class SAMPredictor(Tool):
             #  Crop image to the bounding box from the extreme points and resize
             bbox = helpers.get_bbox(img, points=extreme_points_ori, pad=pad, zero_pad=True)
             crop_image = helpers.crop_from_bbox(img, bbox, zero_pad=True)
-            resize_image = helpers.fixed_resize(crop_image, (512, 512)).astype(np.uint8)
+            resize_image = helpers.fixed_resize(crop_image, (resize_to, resize_to)).astype(np.uint8)
 
-            #  Generate extreme point heat map normalized to image values
+            #  Generate extreme point normalized to image values
             extreme_points = extreme_points_ori - [np.min(extreme_points_ori[:, 0]),
                                                    np.min(extreme_points_ori[:, 1])] + [pad, pad]
+
+            # remap the input points inside the 512 x 512 cropped box
+            extreme_points = (resize_to * extreme_points * [1 / crop_image.shape[1], 1 / crop_image.shape[0]])
 
             # Set the resized image
             self.sampredictor_net.set_image(resize_image)
 
             # Grab the point
-            input_point = np.expand_dims(np.mean(extreme_points, axis=0), axis=0).astype(np.uint8)
+            input_point = np.expand_dims(np.mean(extreme_points, axis=0), axis=0).astype(int)
             input_label = np.array([1])
 
             # Make prediction
@@ -140,6 +147,19 @@ class SAMPredictor(Tool):
                                               im_size=img.shape[:2],
                                               zero_pad=True,
                                               relax=pad).astype(int)
+
+            import matplotlib.pyplot as plt
+            plt.figure(figsize=(10, 10))
+            plt.subplot(2, 1, 1)
+            plt.imshow(img)
+            plt.imshow(segm_mask, alpha=0.5)
+            plt.scatter(extreme_points_ori.T[0], extreme_points_ori.T[1], c='red', s=100)
+            plt.subplot(2, 1, 2)
+            plt.imshow(resize_image)
+            plt.imshow(mask, alpha=0.5)
+            plt.scatter(extreme_points.T[0], extreme_points.T[1], c='red', s=100)
+            plt.savefig(r"B:\TagLab\SegmentationOutput.png")
+            plt.close()
 
             # TODO: move this function to blob!!!
             blobs = self.viewerplus.annotations.blobsFromMask(segm_mask,

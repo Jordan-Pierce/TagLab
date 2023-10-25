@@ -241,7 +241,7 @@ class TagLab(QMainWindow):
         self.btnSAMPredictor = self.newButton("meta.png", "SAM Predictor", flatbuttonstyle2, self.samPredictor)
 
         # Split Screen operation removed from the toolbar
-        self.pxmapSeparator = QPixmap( os.path.join(os.path.join(self.taglab_dir, "icons"), "separator.png"))
+        self.pxmapSeparator = QPixmap(os.path.join(os.path.join(self.taglab_dir, "icons"), "separator.png"))
         self.labelSeparator = QLabel()
         self.labelSeparator.setPixmap(self.pxmapSeparator.scaled(QSize(35, 30)))
         self.btnCreateGrid = self.newButton("grid.png", "Create grid", flatbuttonstyle1, self.createGrid)
