@@ -639,7 +639,6 @@ class QtImageViewerPlus(QtImageViewer):
 
         self.tools.setTool(tool)
 
-        # Jordan
         if tool in ["FREEHAND", "RULER", "DEEPEXTREME", "SAMPREDICTOR"] or \
                 (tool in ["CUT", "EDITBORDER", "RITM"] and len(self.selected_blobs) > 1):
             self.resetSelection()
@@ -662,7 +661,6 @@ class QtImageViewerPlus(QtImageViewer):
                 lbl = Label("", "", fill=[0, 0, 0])
                 self.tools.tools["WATERSHED"].setActiveLabel(lbl)
 
-        # Jordan
         if tool in ["DEEPEXTREME", "SAMPREDICTOR"]:
             self.showCrossair = True
         else:
@@ -678,7 +676,6 @@ class QtImageViewerPlus(QtImageViewer):
 
         self.tools.resetTools()
 
-        # Jordan
         if self.tools.tool in ["DEEPEXTREME", "SAMPREDICTOR"]:
             self.showCrossair = True
         else:
@@ -749,7 +746,6 @@ class QtImageViewerPlus(QtImageViewer):
             if (self.panEnabled and not (mods & Qt.ShiftModifier)) or (mods & Qt.ControlModifier):
                 self.setDragMode(QGraphicsView.ScrollHandDrag)
 
-            # Jordan
             elif self.tools.tool in ["MATCH", "RITM", "DEEPEXTREME", "SAMPREDICTOR"]:
                 self.tools.leftPressed(x, y, mods)
 
