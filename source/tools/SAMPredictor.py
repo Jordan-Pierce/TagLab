@@ -141,7 +141,13 @@ class SAMPredictor(Tool):
             mask, score, logit = self.sampredictor_net.predict(point_coords=input_point,
                                                                point_labels=input_label,
                                                                multimask_output=False)
-            mask = mask.squeeze().astype(float)
+
+            # If it's a good mask, else return nothing
+            if score.squeeze() >= 0.75:
+                mask = mask.squeeze().astype(float)
+            else:
+                mask = np.zeros(shape=(resize_to, resize_to), dtype=float)
+
             segm_mask = helpers.crop2fullmask(mask,
                                               bbox,
                                               im_size=img.shape[:2],
