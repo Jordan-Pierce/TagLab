@@ -236,8 +236,6 @@ class TagLab(QMainWindow):
         self.btnDeepExtreme = self.newButton("dexter.png", "4-clicks segmentation", flatbuttonstyle2, self.deepExtreme)
         self.btnRitm = self.newButton("ritm.png", "Positive/negative clicks segmentation", flatbuttonstyle2, self.ritm)
         self.btnAutoClassification = self.newButton("auto.png", "Fully auto semantic segmentation", flatbuttonstyle2, self.selectClassifier)
-
-        # Jordan
         self.btnSAMPredictor = self.newButton("meta.png", "SAM Predictor", flatbuttonstyle2, self.samPredictor)
 
         # Split Screen operation removed from the toolbar
@@ -273,7 +271,6 @@ class TagLab(QMainWindow):
         # layout_tools.addWidget(self.btnSplitBlob)
         layout_tools.addWidget(self.btnRuler)
         layout_tools.addWidget(self.btnAutoClassification)
-        # Jordan
         layout_tools.addWidget(self.btnSAMPredictor)
 
         layout_tools.addSpacing(3)
@@ -306,8 +303,7 @@ class TagLab(QMainWindow):
         self.refineAction = self.newAction("Refine Border", "R", self.refineBorderOperation)
         self.dilateAction = self.newAction("Dilate Border", "+", self.dilate)
         self.erodeAction = self.newAction("Erode Border", "-", self.erode)
-        self.attachBoundariesAction = self.newAction("Attach Boundaries", "B",
-                                                     self.attachBoundaries)
+        self.attachBoundariesAction = self.newAction("Attach Boundaries", "B", self.attachBoundaries)
         self.fillAction = self.newAction("Fill Label", "F", self.fillLabel)
 
         # VIEWERPLUS
@@ -623,8 +619,6 @@ class TagLab(QMainWindow):
         # NETWORKS
         self.deepextreme_net = None
         self.classifier = None
-
-        # Jordan
         self.sampredictor_net = None
 
         # a dirty trick to adjust all the size..
@@ -2349,7 +2343,6 @@ class TagLab(QMainWindow):
         self.btnGrid.setChecked(False)
         self.btnMatch.setChecked(False)
         self.btnAutoClassification.setChecked(False)
-        # Jordan
         self.btnSAMPredictor.setChecked(False)
 
         if self.scale_widget is not None:
@@ -2370,7 +2363,6 @@ class TagLab(QMainWindow):
             "DEEPEXTREME": ["4-click", self.btnDeepExtreme],
             "MATCH": ["Match", self.btnMatch],
             "RITM": ["Ritm", self.btnRitm],
-            # Jordan
             "SAMPREDICTOR": ["SAM", self.btnSAMPredictor]
         }
         newtool = tools[tool]
@@ -2487,12 +2479,11 @@ class TagLab(QMainWindow):
         """
         self.setTool("DEEPEXTREME")
 
-    # Jordan
     @pyqtSlot()
     def samPredictor(self):
         """
-        Activate the "SAM Predictor" tool. The segmentation is performed by selecting four points at the
-        extreme of the corals and confirm the points by pressing SPACE.
+        Activate the "SAM Predictor" tool. The segmentation is performed by selecting a single point at the
+        center of the coral and confirm the point by pressing SPACE.
         """
         self.setTool("SAMPREDICTOR")
 
@@ -3349,12 +3340,20 @@ class TagLab(QMainWindow):
     @pyqtSlot()
     def updateToolStatus(self):
 
-        for button in [self.btnMove, self.btnAssign, self.btnEditBorder, self.btnCut,
+        for button in [self.btnMove,
+                       self.btnAssign,
+                       self.btnEditBorder,
+                       self.btnCut,
                        self.btnFreehand,
-                       self.btnCreateCrack, self.btnWatershed, self.btnBricksSegmentation,
-                       self.btnRuler, self.btnDeepExtreme,
-                       self.btnRitm, self.btnAutoClassification, self.btnCreateGrid, self.btnGrid,
-                       # Jordan
+                       self.btnCreateCrack,
+                       self.btnWatershed,
+                       self.btnBricksSegmentation,
+                       self.btnRuler,
+                       self.btnDeepExtreme,
+                       self.btnRitm,
+                       self.btnAutoClassification,
+                       self.btnCreateGrid,
+                       self.btnGrid,
                        self.btnSAMPredictor]:
 
             button.setEnabled(len(self.project.images) > 0)
@@ -4453,7 +4452,6 @@ class TagLab(QMainWindow):
             del self.classifier
             self.classifier = None
 
-        # Jordan
         if self.sampredictor_net is not None:
             del self.sampredictor_net
             self.sampredictor_net = None

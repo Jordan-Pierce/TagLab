@@ -148,18 +148,18 @@ class SAMPredictor(Tool):
                                               zero_pad=True,
                                               relax=pad).astype(int)
 
-            import matplotlib.pyplot as plt
-            plt.figure(figsize=(10, 10))
-            plt.subplot(2, 1, 1)
-            plt.imshow(img)
-            plt.imshow(segm_mask, alpha=0.5)
-            plt.scatter(extreme_points_ori.T[0], extreme_points_ori.T[1], c='red', s=100)
-            plt.subplot(2, 1, 2)
-            plt.imshow(resize_image)
-            plt.imshow(mask, alpha=0.5)
-            plt.scatter(extreme_points.T[0], extreme_points.T[1], c='red', s=100)
-            plt.savefig(r"B:\TagLab\SegmentationOutput.png")
-            plt.close()
+            # import matplotlib.pyplot as plt
+            # plt.figure(figsize=(10, 10))
+            # plt.subplot(2, 1, 1)
+            # plt.imshow(img)
+            # plt.imshow(segm_mask, alpha=0.5)
+            # plt.scatter(extreme_points_ori.T[0], extreme_points_ori.T[1], c='red', s=100)
+            # plt.subplot(2, 1, 2)
+            # plt.imshow(resize_image)
+            # plt.imshow(mask, alpha=0.5)
+            # plt.scatter(extreme_points.T[0], extreme_points.T[1], c='red', s=100)
+            # plt.savefig(r"B:\TagLab\SegmentationOutput.png")
+            # plt.close()
 
             # TODO: move this function to blob!!!
             blobs = self.viewerplus.annotations.blobsFromMask(segm_mask,

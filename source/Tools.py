@@ -19,8 +19,6 @@ from source.tools.DeepExtreme import DeepExtreme
 from source.tools.Match import Match
 from source.tools.SelectArea import SelectArea
 from source.tools.Ritm import Ritm
-
-# Jordan
 from source.tools.SAMPredictor import SAMPredictor
 
 
@@ -59,7 +57,6 @@ class Tools(object):
             "MATCH": Match(self.viewerplus),
             "SELECTAREA": SelectArea(self.viewerplus, self.pick_points),
             "RITM": Ritm(self.viewerplus, self.corrective_points),
-            # Jordan
             "SAMPREDICTOR": SAMPredictor(self.viewerplus, self.pick_points)
         }
         # connect infomessage, log, blobinfo for   all tools with self.infoWidget.setInfoMessage(
@@ -80,7 +77,6 @@ class Tools(object):
         self.tools["DEEPEXTREME"].reset()
         self.tools["RITM"].reset()
         self.tools["SELECTAREA"].reset()
-        # Jordan
         self.tools["SAMPREDICTOR"].reset()
 
         if self.tool == "AUTOCLASS":
