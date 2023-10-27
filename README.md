@@ -2,68 +2,6 @@
 
 | &nbsp; [Software Requirements](#software-requirements) &nbsp; | &nbsp; [Install](#installing-taglab) &nbsp; | &nbsp; [Update](#updating-taglab) &nbsp; | &nbsp; [Citation](#citation) &nbsp; |
 
-## NOAA Install
-
-Below are the instructions for installing TagLab on a `Windows` machine. 
-Please read through this first, and then perform each action as instructed.
-
-First, check that `Anaconda` is installed on your computer; do this by pressing the `Windows` key, and typing 
-`Anaconda`. If the `Anaconda Prompt` is not present, consult with IT about installing 
-[`miniconda`](https://docs.conda.io/projects/miniconda/en/latest/).
-
-Open `Anaconda Prompt` and check to see if a `taglab` environment already exists:
-```python
-# cmd
-conda env list
-```
-
-If it doesn't, create a new conda environment called `taglab` where we will install all the dependencies.
-```python
-# cmd
-conda create --name taglab python=3.8 -y
-```
-
-Once this has finished, or it already exists, get into or `activate` the conda environment by typing the following:
-```python
-# cmd
-conda activate taglab
-```
-
-This should change your `cmd` from `(base)` to `(taglab)`; if it doesn't, do not proceed and consult with Jordan. 
-Now we need to navigate to the folder that already has this `TagLab` repository, or where you would like to put it: 
-```python
-# cmd
-
-# If you want to change drives, enter the drive letter
-W:
-
-# If you want to change directories, use cd
-cd Documents\Code\TagLab
-
-# If this TagLab repository isn't already downloaded, use git to clone it
-git clone https://github.com/Jordan-Pierce/TagLab.git
-cd TagLab
-
-# Or download it from GitHub, and unzip the folder, and cd inside of it
-cd Documents\Code\TagLab-main
-```
-
-After `TagLab` is downloaded, we will install the dependencies needed using the modified `install.py` script:
-```python
-# cmd
-python install.py
-
-# or with cpu if cuda is not installed
-python install.py cpu
-```
-
-Once this has finished, you can run `TagLab`:
-```python
-# cmd
-python TagLab.py
-```
-
-If you have issues installing, or getting `TagLab` to run, contact Jordan.
 
 ## Introduction
 
@@ -94,6 +32,10 @@ TagLab allows to :
 - export shapefiles
 - export a new dataset and train your network (!)
 
+#### ✨ New Features (10/2023):
+  - install script for Windows using [Anaconda](https://docs.conda.io/projects/miniconda/en/latest/); see Installation instructions below
+  - [Segment Anything Model (SAM)](https://github.com/facebookresearch/segment-anything) predictor for one-click segmentations
+
 We are working hard to create a web site with detailed instructions about TagLab. Stay tuned(!)
 
 
@@ -108,7 +50,24 @@ If you don't have a NVida graphics card (or if you use MacOS), CPU will be used.
 
 ## Installing TagLab
 
-See the instructions on the [wiki](https://github.com/cnr-isti-vclab/TagLab/wiki/Install-TagLab).
+To install TagLab on Windows using [Anaconda](https://docs.conda.io/projects/miniconda/en/latest/), follow the
+instructions below. If CUDA is not installed on your computer, include `cpu` when running the install script:
+```python
+# Anaconda Command Prompt
+
+# Create a conda environment for TagLab
+conda create --name taglab python=3.8 -y
+
+# Activate the environment
+conda activate taglab
+
+# Within the TagLab folder, run the install_w_conda.py script
+python install_w_conda.py [cpu]
+
+# Run TagLab
+python Taglab.py
+```
+For further instructions on installing TagLab see the [wiki](https://github.com/cnr-isti-vclab/TagLab/wiki/Install-TagLab) for more information.
 
 ## Updating TagLab
 
