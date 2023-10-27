@@ -2482,8 +2482,9 @@ class TagLab(QMainWindow):
     @pyqtSlot()
     def samPredictor(self):
         """
-        Activate the "SAM Predictor" tool. The segmentation is performed by selecting a single point at the
-        center of the coral and confirm the point by pressing SPACE.
+        Activate the "SAM Predictor" tool. The segmentation is performed by selecting one point at the center
+        of a coral (left-click + Shift), or selecting multiple points around the extremes (left-click) with the
+        last point selected (left-click) while pressing the Shift key (i.e., left-click + Shift activates SAM).
         """
         self.setTool("SAMPREDICTOR")
 

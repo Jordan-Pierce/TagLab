@@ -125,17 +125,22 @@ class Annotation(QObject):
         return self.seg_blobs
 
     #move to BLOB!
-    def blobsFromMask(self, seg_mask, map_pos_x, map_pos_y, area_mask):
+    def blobsFromMask(self, seg_mask, map_pos_x, map_pos_y, area_mask, keep_only_largest=False):
         # create the blobs from the segmentation mask
 
         last_blobs_added = []
 
         seg_mask = ndi.binary_fill_holes(seg_mask).astype(int)
         label_image = measure.label(seg_mask)
+        # Change to sort based on area, the largest region is first
+        regions = sorted(measure.regionprops(label_image), key=lambda r: r.area, reverse=True)
 
         area_th = area_mask * 0.2
 
-        for region in measure.regionprops(label_image):
+        if regions and keep_only_largest:
+            regions = [regions[0]]
+
+        for region in regions:
 
             if region.area > area_th:
 
