@@ -742,11 +742,15 @@ class QtImageViewerPlus(QtImageViewer):
             (x, y) = self.clipScenePos(scenePos)
             self.leftMouseButtonPressed.emit(x, y)
 
-            #used from area selection and pen drawing,
-            if (self.panEnabled and not (mods & Qt.ShiftModifier)) or (mods & Qt.ControlModifier):
+            # Add points without shift for SAM, until shift and last point is added
+            if self.tools.tool == 'SAMPREDICTOR':
+                self.tools.leftPressed(x, y, mods)
+
+            # used from area selection and pen drawing,
+            elif (self.panEnabled and not (mods & Qt.ShiftModifier)) or (mods & Qt.ControlModifier):
                 self.setDragMode(QGraphicsView.ScrollHandDrag)
 
-            elif self.tools.tool in ["MATCH", "RITM", "DEEPEXTREME", "SAMPREDICTOR"]:
+            elif self.tools.tool in ["MATCH", "RITM", "DEEPEXTREME"]:
                 self.tools.leftPressed(x, y, mods)
 
             elif mods & Qt.ShiftModifier:

@@ -33,28 +33,46 @@ class SAMPredictor(Tool):
         self.device = None
 
     def leftPressed(self, x, y, mods):
+
         points = self.pick_points.points
 
-        if len(points) < 1 and mods == Qt.ShiftModifier:
+        # Single Click
+        # There are no existing points, but this point and shift are clicked
+        if not points and mods == Qt.ShiftModifier:
             self.pick_points.addPoint(x, y, self.pick_style)
             message = "[TOOL][SAMPREDICTOR] New point picked (" + str(len(points)) + ")"
             self.log.emit(message)
 
-        # APPLY SAM PREDICTOR
-        if len(points) == 1:
             self.segmentWithSAMPredictor()
             self.pick_points.reset()
 
-    def prepareForSAMPredictor(self, four_points, pad_max):
+        # Multi Click
+        # Point is clicked without shift
+        if mods != Qt.ShiftModifier:
+            self.pick_points.addPoint(x, y, self.pick_style)
+            message = "[TOOL][SAMPREDICTOR] New point picked (" + str(len(points)) + ")"
+            self.log.emit(message)
+
+        # Last Click
+        # There are existing points, and the latest point was clicked with shift
+        if len(points) and mods == Qt.ShiftModifier:
+            self.pick_points.addPoint(x, y, self.pick_style)
+            message = "[TOOL][SAMPREDICTOR] New point picked (" + str(len(points)) + ")"
+            self.log.emit(message)
+
+            self.segmentWithSAMPredictor()
+            self.pick_points.reset()
+
+    def prepareForSAMPredictor(self, points, pad_max):
         """
         Crop the image map (QImage) and return a NUMPY array containing it.
         It returns also the coordinates of the bounding box on the cropped image.
         """
 
-        left = four_points[:, 0].min() - pad_max
-        right = four_points[:, 0].max() + pad_max
-        top = four_points[:, 1].min() - pad_max
-        bottom = four_points[:, 1].max() + pad_max
+        left = points[:, 0].min() - pad_max
+        right = points[:, 0].max() + pad_max
+        top = points[:, 1].min() - pad_max
+        bottom = points[:, 1].max() + pad_max
         h = bottom - top
         w = right - left
 
@@ -73,12 +91,12 @@ class SAMPredictor(Tool):
         arr[:, :, 1] = arrtemp[:, :, 1]
         arr[:, :, 2] = arrtemp[:, :, 0]
 
-        # update four point
-        four_points_updated = np.zeros((4, 2), dtype=np.int32)
-        four_points_updated[:, 0] = four_points[:, 0] - left
-        four_points_updated[:, 1] = four_points[:, 1] - top
+        # update points to be in image_cropped coordinate space
+        updated_points = np.zeros((len(points), 2), dtype=np.int32)
+        updated_points[:, 0] = points[:, 0] - left
+        updated_points[:, 1] = points[:, 1] - top
 
-        return (arr, four_points_updated)
+        return arr, updated_points
 
     def segmentWithSAMPredictor(self):
 
@@ -92,50 +110,58 @@ class SAMPredictor(Tool):
         # load network if necessary
         self.loadNetwork()
 
-        factor = 2
-        pad = 50 * factor
-        pad_extreme = 100 * factor
-        box = pad_extreme * 2 * factor
-        resize_to = 512 * factor
+        # Shape of the mosaic
+        width = self.viewerplus.img_map.size().width()
+        height = self.viewerplus.img_map.size().height()
 
-        point = self.pick_points.points[0].tolist()
-        extreme_points_to_use = np.array([[point[0] - box, point[1] - box],
-                                          [point[0] - box, point[1] + box],
-                                          [point[0] + box, point[1] - box],
-                                          [point[0] + box, point[1] + box]])
+        # The amount to pad in all directions around the point(s)
+        # Useful as mosaics are of different sizes
+        pad = int(np.max([width, height]) * 0.25)
 
-        left_map_pos = extreme_points_to_use[:, 0].min() - pad_extreme
-        top_map_pos = extreme_points_to_use[:, 1].min() - pad_extreme
+        # The size to resize the image to before passing into model
+        # Ensures consistent prediction time for all situations
+        resize_to = 512
 
-        width_extreme_points = extreme_points_to_use[:, 0].max() - extreme_points_to_use[:, 0].min()
-        height_extreme_points = extreme_points_to_use[:, 1].max() - extreme_points_to_use[:, 1].min()
-        area_extreme_points = ((width_extreme_points * height_extreme_points) / 10)
-        area_extreme_points = 1000
+        points_to_use = np.asarray(self.pick_points.points).astype(int)
+        left_map_pos = points_to_use[:, 0].min() - pad
+        top_map_pos = points_to_use[:, 1].min() - pad
 
-        (img, extreme_points_new) = self.prepareForSAMPredictor(extreme_points_to_use, pad_extreme)
+        (img, extreme_points_new) = self.prepareForSAMPredictor(points_to_use, pad)
 
         with torch.no_grad():
 
+            # Points in img coordinate space
             extreme_points_ori = extreme_points_new.astype(int)
-
-            #  Crop image to the bounding box from the extreme points and resize
+            #  Padding of points by amount pad
             bbox = helpers.get_bbox(img, points=extreme_points_ori, pad=pad, zero_pad=True)
+            # Cropping the image, and resizing it
             crop_image = helpers.crop_from_bbox(img, bbox, zero_pad=True)
             resize_image = helpers.fixed_resize(crop_image, (resize_to, resize_to)).astype(np.uint8)
 
-            #  Generate extreme point normalized to image values
+            # Generate extreme point normalized to image values
             extreme_points = extreme_points_ori - [np.min(extreme_points_ori[:, 0]),
                                                    np.min(extreme_points_ori[:, 1])] + [pad, pad]
 
-            # remap the input points inside the 512 x 512 cropped box
+            # Remap the input points inside the resize_to x resize_to cropped box
             extreme_points = (resize_to * extreme_points * [1 / crop_image.shape[1], 1 / crop_image.shape[0]])
+
+            import matplotlib.pyplot as plt
+            plt.figure(figsize=(10, 10))
+            plt.subplot(2, 1, 1)
+            plt.imshow(img)
+            plt.scatter(extreme_points_ori.T[0], extreme_points_ori.T[1], c='red', s=100)
+            plt.subplot(2, 1, 2)
+            plt.imshow(resize_image)
+            plt.scatter(extreme_points.T[0], extreme_points.T[1], c='red', s=100)
+            plt.savefig(r"B:\TagLab\PointsOutput.png")
+            plt.close()
 
             # Set the resized image
             self.sampredictor_net.set_image(resize_image)
 
             # Grab the point
-            input_point = np.expand_dims(np.mean(extreme_points, axis=0), axis=0).astype(int)
-            input_label = np.array([1])
+            input_point = extreme_points.astype(int)
+            input_label = np.array([1] * len(extreme_points))
 
             # Make prediction
             mask, score, logit = self.sampredictor_net.predict(point_coords=input_point,
@@ -145,33 +171,35 @@ class SAMPredictor(Tool):
             # If it's a good mask, else return nothing
             if score.squeeze() >= 0.75:
                 mask = mask.squeeze().astype(float)
+
             else:
-                mask = np.zeros(shape=(resize_to, resize_to), dtype=float)
+                self.infoMessage.emit("Selected point's score is too low, skipping...")
+                mask = np.zeros(shape=resize_image.shape[0:2], dtype=float)
 
             segm_mask = helpers.crop2fullmask(mask,
                                               bbox,
                                               im_size=img.shape[:2],
                                               zero_pad=True,
-                                              relax=pad).astype(int)
+                                              relax=0).astype(int)
 
-            # import matplotlib.pyplot as plt
-            # plt.figure(figsize=(10, 10))
-            # plt.subplot(2, 1, 1)
-            # plt.imshow(img)
-            # plt.imshow(segm_mask, alpha=0.5)
-            # plt.scatter(extreme_points_ori.T[0], extreme_points_ori.T[1], c='red', s=100)
-            # plt.subplot(2, 1, 2)
-            # plt.imshow(resize_image)
-            # plt.imshow(mask, alpha=0.5)
-            # plt.scatter(extreme_points.T[0], extreme_points.T[1], c='red', s=100)
-            # plt.savefig(r"B:\TagLab\SegmentationOutput.png")
-            # plt.close()
+            import matplotlib.pyplot as plt
+            plt.figure(figsize=(10, 10))
+            plt.subplot(2, 1, 1)
+            plt.imshow(img)
+            plt.imshow(segm_mask, alpha=0.5)
+            plt.scatter(extreme_points_ori.T[0], extreme_points_ori.T[1], c='red', s=100)
+            plt.subplot(2, 1, 2)
+            plt.imshow(resize_image)
+            plt.imshow(mask, alpha=0.5)
+            plt.scatter(extreme_points.T[0], extreme_points.T[1], c='red', s=100)
+            plt.savefig(r"B:\TagLab\SegmentationOutput.png")
+            plt.close()
 
             # TODO: move this function to blob!!!
             blobs = self.viewerplus.annotations.blobsFromMask(segm_mask,
                                                               left_map_pos,
                                                               top_map_pos,
-                                                              area_extreme_points)
+                                                              1000)
 
             self.viewerplus.resetSelection()
 
