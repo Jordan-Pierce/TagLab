@@ -29,7 +29,7 @@ class SAMPredictor(Tool):
         self.pick_points = pick_points
 
         # Image is resized to
-        self.resize_to = 1024
+        self.resize_to = 2048
         # Model Type (b, l, or h)
         self.sam_model_type = 'vit_l'
         # Mask score threshold
@@ -142,97 +142,93 @@ class SAMPredictor(Tool):
         left_map_pos = points_to_use[:, 0].min() - pad
         top_map_pos = points_to_use[:, 1].min() - pad
 
-        (img, extreme_points_new) = self.prepareForSAMPredictor(points_to_use, pad)
+        (img, points_new) = self.prepareForSAMPredictor(points_to_use, pad)
 
-        with torch.no_grad():
+        # Points in img coordinate space
+        points_ori = points_new.astype(int)
+        #  Padding of points by amount pad
+        bbox = helpers.get_bbox(img, points=points_ori, pad=pad, zero_pad=True)
+        # Cropping the image, and resizing it
+        image_cropped = helpers.crop_from_bbox(img, bbox, zero_pad=True)
+        image_resized = helpers.fixed_resize(image_cropped, (self.resize_to, self.resize_to)).astype(np.uint8)
 
-            # Points in img coordinate space
-            extreme_points_ori = extreme_points_new.astype(int)
-            #  Padding of points by amount pad
-            bbox = helpers.get_bbox(img, points=extreme_points_ori, pad=pad, zero_pad=True)
-            # Cropping the image, and resizing it
-            crop_image = helpers.crop_from_bbox(img, bbox, zero_pad=True)
-            resize_image = helpers.fixed_resize(crop_image, (self.resize_to, self.resize_to)).astype(np.uint8)
+        # Generate points normalized to image values
+        points_resized = points_ori - [np.min(points_ori[:, 0]), np.min(points_ori[:, 1])] + [pad, pad]
+        # Remap the input points inside the resize_to x resize_to cropped box
+        points_resized = (self.resize_to * points_resized * [1 / image_cropped.shape[1], 1 / image_cropped.shape[0]])
 
-            # Generate extreme point normalized to image values
-            extreme_points = extreme_points_ori - [np.min(extreme_points_ori[:, 0]),
-                                                   np.min(extreme_points_ori[:, 1])] + [pad, pad]
+        if self.debug:
+            os.makedirs("debug/", exist_ok=True)
+            plt.figure(figsize=(10, 10))
+            plt.subplot(2, 1, 1)
+            plt.imshow(img)
+            plt.scatter(points_ori.T[0], points_ori.T[1], c='red', s=100)
+            plt.subplot(2, 1, 2)
+            plt.imshow(image_resized)
+            plt.scatter(points_resized.T[0], points_resized.T[1], c='red', s=100)
+            plt.savefig(r"debug\PointsOutput.png")
+            plt.close()
 
-            # Remap the input points inside the resize_to x resize_to cropped box
-            extreme_points = (self.resize_to * extreme_points * [1 / crop_image.shape[1], 1 / crop_image.shape[0]])
+        # Set the resized image
+        self.sampredictor_net.set_image(image_resized)
 
-            if self.debug:
-                os.makedirs("debug/", exist_ok=True)
-                plt.figure(figsize=(10, 10))
-                plt.subplot(2, 1, 1)
-                plt.imshow(img)
-                plt.scatter(extreme_points_ori.T[0], extreme_points_ori.T[1], c='red', s=100)
-                plt.subplot(2, 1, 2)
-                plt.imshow(resize_image)
-                plt.scatter(extreme_points.T[0], extreme_points.T[1], c='red', s=100)
-                plt.savefig(r"debug\PointsOutput.png")
-                plt.close()
+        # Transform the points to torch
+        input_points = points_resized.astype(int)
+        input_points = np.reshape(input_points, )
+        input_labels = np.array([1] * len(points_resized))
 
-            # Set the resized image
-            self.sampredictor_net.set_image(resize_image)
+        # Make prediction given points
+        mask, score, logit = self.sampredictor_net.predict(point_coords=input_points,
+                                                           point_labels=input_labels,
+                                                           multimask_output=False)
 
-            # Grab the point
-            input_points = extreme_points.astype(int)
-            input_labels = np.array([1] * len(extreme_points))
+        # If it's a good mask, else return nothing to GUI
+        if score.squeeze() >= self.score_threshold:
+            mask = mask.squeeze().astype(float)
+        else:
+            self.infoMessage.emit("Predicted mask score is too low, skipping...")
+            mask = np.zeros(shape=image_resized.shape[0:2], dtype=float)
 
-            # Make prediction given points
-            mask, score, logit = self.sampredictor_net.predict(point_coords=input_points,
-                                                               point_labels=input_labels,
-                                                               multimask_output=False)
+        # Resize the mask to be the same dimensions as original image
+        segm_mask = helpers.crop2fullmask(mask,
+                                          bbox,
+                                          im_size=img.shape[:2],
+                                          zero_pad=True,
+                                          relax=0).astype(np.uint8)
 
-            # If it's a good mask, else return nothing to GUI
-            if score.squeeze() >= self.score_threshold:
-                mask = mask.squeeze().astype(float)
-            else:
-                self.infoMessage.emit("Predicted mask score is too low, skipping...")
-                mask = np.zeros(shape=resize_image.shape[0:2], dtype=float)
+        # Smooth mask after being resized
+        kernel = np.ones((3, 3), np.uint8)
+        segm_mask = cv2.morphologyEx(segm_mask, cv2.MORPH_CLOSE, kernel, iterations=3)
 
-            # Resize the mask to be the same dimensions as original image
-            segm_mask = helpers.crop2fullmask(mask,
-                                              bbox,
-                                              im_size=img.shape[:2],
-                                              zero_pad=True,
-                                              relax=0).astype(np.uint8)
+        if self.debug:
+            plt.figure(figsize=(10, 10))
+            plt.subplot(2, 1, 1)
+            plt.imshow(img)
+            plt.imshow(segm_mask, alpha=0.5)
+            plt.scatter(points_ori.T[0], points_ori.T[1], c='red', s=100)
+            plt.subplot(2, 1, 2)
+            plt.imshow(image_resized)
+            plt.imshow(mask, alpha=0.5)
+            plt.scatter(points_resized.T[0], points_resized.T[1], c='red', s=100)
+            plt.savefig(r"debug\SegmentationOutput.png")
+            plt.close()
 
-            # Smooth mask after being resized
-            kernel = np.ones((3, 3), np.uint8)
-            segm_mask = cv2.morphologyEx(segm_mask, cv2.MORPH_CLOSE, kernel, iterations=3)
+        # TODO: move this function to blob!!!
+        # SAM Masks shouldn't have multiple blobs (ideally), so only keep largest
+        blobs = self.viewerplus.annotations.blobsFromMask(segm_mask,
+                                                          left_map_pos,
+                                                          top_map_pos,
+                                                          area_mask=1000,
+                                                          keep_only_largest=True)
 
-            if self.debug:
-                plt.figure(figsize=(10, 10))
-                plt.subplot(2, 1, 1)
-                plt.imshow(img)
-                plt.imshow(segm_mask, alpha=0.5)
-                plt.scatter(extreme_points_ori.T[0], extreme_points_ori.T[1], c='red', s=100)
-                plt.subplot(2, 1, 2)
-                plt.imshow(resize_image)
-                plt.imshow(mask, alpha=0.5)
-                plt.scatter(extreme_points.T[0], extreme_points.T[1], c='red', s=100)
-                plt.savefig(r"debug\SegmentationOutput.png")
-                plt.close()
+        self.viewerplus.resetSelection()
 
-            # TODO: move this function to blob!!!
-            # SAM Masks shouldn't have multiple blobs (ideally), so only keep largest
-            blobs = self.viewerplus.annotations.blobsFromMask(segm_mask,
-                                                              left_map_pos,
-                                                              top_map_pos,
-                                                              area_mask=1000,
-                                                              keep_only_largest=True)
+        for blob in blobs:
+            self.viewerplus.addBlob(blob, selected=True)
+            self.blobInfo.emit(blob, "[TOOL][SAMPREDICTOR][BLOB-CREATED]")
+        self.viewerplus.saveUndo()
 
-            self.viewerplus.resetSelection()
-
-            for blob in blobs:
-                self.viewerplus.addBlob(blob, selected=True)
-                self.blobInfo.emit(blob, "[TOOL][SAMPREDICTOR][BLOB-CREATED]")
-            self.viewerplus.saveUndo()
-
-            self.infoMessage.emit("Segmentation done.")
-
+        self.infoMessage.emit("Segmentation done.")
         self.log.emit("[TOOL][SAMPREDICTOR] Segmentation ends.")
 
         QApplication.restoreOverrideCursor()
