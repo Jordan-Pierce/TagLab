@@ -1,7 +1,6 @@
 import os
 import sys
 import shutil
-import requests
 import platform
 import subprocess
 from pathlib import Path
@@ -56,11 +55,20 @@ elif not flag_install_pythorch_cpu:
     # For Windows, find CUDA versions in Program Files
     cuda_versions = os.listdir(cuda_path)
 
-    # Find the newest version
-    if cuda_versions:
-        nvcc_version = re.sub(r'[a-zA-Z]', '', max(cuda_versions))
+    # List containing CUDA versions installed (properly)
+    cuda_versions_installed = []
 
-        # Install NVCC using conda
+    for cuda_version in cuda_versions:
+        cuda_folder = f"{cuda_path}\\{cuda_version}\\bin"
+        # Presence of bin indicates that it was probably installed properly
+        if os.path.exists(cuda_folder):
+            cuda_versions_installed.append(cuda_version)
+
+    if cuda_versions:
+        # Find the newest version that was installed properly
+        nvcc_version = re.sub(r'[a-zA-Z]', '', max(cuda_versions_installed))
+
+        # Install NVCC version using conda
         conda_exe = shutil.which('conda')
 
         if conda_exe:
@@ -74,6 +82,7 @@ elif not flag_install_pythorch_cpu:
             sys.exit(1)
     else:
         something_wrong_with_nvcc = True
+        nvcc_version = ""
 
     # Install pytorch using nvcc version
     if '9.2' in nvcc_version:
@@ -144,7 +153,7 @@ elif not flag_install_pythorch_cpu:
             flag_install_pythorch_cpu = True
         else:
             raise Exception('Installation aborted. '
-                            'Install a proper NVCC version or set the pythorch CPU version.')
+                            'Install a proper NVCC version or set the pytorch CPU version.')
 
 # somewhere before, this flag has been set to True and the
 # user choose to install the cpu torch version
@@ -278,7 +287,6 @@ install_requires = [
     'matplotlib',
     'albumentations',
     'shapely',
-    'numpy'
 ]
 
 # if on windows, first install the msvc runtime, pycocotools
@@ -375,6 +383,10 @@ else:
         # install rasterio
         subprocess.check_call([sys.executable, "-m", "pip", "install", base_url_rasterio])
 
+# Install Numpy (installing before raises warnings about versions conflicts)
+command = [sys.executable, "-m", "pip", "install", "numpy"]
+subprocess.run(command, check=True)
+
 # Install SAM
 command = [sys.executable, "-m", "pip", "install", "git+https://github.com/facebookresearch/segment-anything.git"]
 subprocess.run(command, check=True)
@@ -424,20 +436,15 @@ for net_name in net_file_names:
         try:
             url_dextr = base_url + net_name
             print('Downloading ' + url_dextr + '...')
-
             # Send an HTTP GET request to the URL
-            response = requests.get(url_dextr)
+            opener = urllib.request.build_opener()
+            opener.addheaders = [('User-agent', 'Mozilla/5.0')]
+            urllib.request.install_opener(opener)
+            urllib.request.urlretrieve(url_dextr, path_dextr)
+            print(f"NOTE: Downloaded file successfully")
+            print(f"NOTE: Saved file to {path_dextr}")
+        except:
+            raise Exception("Cannot download " + net_name + ".")
 
-            # Check if the request was successful (status code 200)
-            if response.status_code == 200:
-                with open(path_dextr, 'wb') as file:
-                    # Write the content to the file
-                    file.write(response.content)
-                print(f"NOTE: Downloaded file successfully")
-                print(f"NOTE: Saved file to {path_dextr}")
-            else:
-                print(f"ERROR: Failed to download file. Status code: {response.status_code}")
-        except requests.exceptions.RequestException as e:
-            print(f"ERROR: An error occurred: {e}")
     else:
         print(net_name + ' already exists.')
