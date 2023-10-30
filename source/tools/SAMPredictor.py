@@ -1,6 +1,6 @@
 import cv2
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QMessageBox
 from PyQt5.QtGui import QImage
 
 from source.tools.Tool import Tool
@@ -33,7 +33,7 @@ class SAMPredictor(Tool):
         # Model Type (b, l, or h)
         self.sam_model_type = 'vit_l'
         # Mask score threshold
-        self.score_threshold = 0.90
+        self.score_threshold = 0.80
         # For debugging
         self.debug = False
 
@@ -44,34 +44,40 @@ class SAMPredictor(Tool):
 
     def leftPressed(self, x, y, mods):
 
-        points = self.pick_points.points
+        # Load Network in the beginning
+        self.loadNetwork()
 
-        # Single Click
-        # There are no existing points, but this point and shift are clicked
-        if not points and mods == Qt.ShiftModifier:
-            self.pick_points.addPoint(x, y, self.pick_style)
-            message = "[TOOL][SAMPREDICTOR] New point picked (" + str(len(points)) + ")"
-            self.log.emit(message)
+        # If the weights are there, continue
+        if self.sampredictor_net:
 
-            self.segmentWithSAMPredictor()
-            self.pick_points.reset()
+            points = self.pick_points.points
 
-        # Multi Click
-        # Point is clicked without shift
-        if mods != Qt.ShiftModifier:
-            self.pick_points.addPoint(x, y, self.pick_style)
-            message = "[TOOL][SAMPREDICTOR] New point picked (" + str(len(points)) + ")"
-            self.log.emit(message)
+            # Single Click
+            # There are no existing points, but this point and shift are clicked
+            if not points and mods == Qt.ShiftModifier:
+                self.pick_points.addPoint(x, y, self.pick_style)
+                message = "[TOOL][SAMPREDICTOR] New point picked (" + str(len(points)) + ")"
+                self.log.emit(message)
 
-        # Last Click
-        # There are existing points, and the latest point was clicked with shift
-        if len(points) and mods == Qt.ShiftModifier:
-            self.pick_points.addPoint(x, y, self.pick_style)
-            message = "[TOOL][SAMPREDICTOR] New point picked (" + str(len(points)) + ")"
-            self.log.emit(message)
+                self.segmentWithSAMPredictor()
+                self.pick_points.reset()
 
-            self.segmentWithSAMPredictor()
-            self.pick_points.reset()
+            # Multi Click
+            # Point is clicked without shift
+            if mods != Qt.ShiftModifier:
+                self.pick_points.addPoint(x, y, self.pick_style)
+                message = "[TOOL][SAMPREDICTOR] New point picked (" + str(len(points)) + ")"
+                self.log.emit(message)
+
+            # Last Click
+            # There are existing points, and the latest point was clicked with shift
+            if len(points) and mods == Qt.ShiftModifier:
+                self.pick_points.addPoint(x, y, self.pick_style)
+                message = "[TOOL][SAMPREDICTOR] New point picked (" + str(len(points)) + ")"
+                self.log.emit(message)
+
+                self.segmentWithSAMPredictor()
+                self.pick_points.reset()
 
     def prepareForSAMPredictor(self, points, pad_max):
         """
@@ -116,9 +122,6 @@ class SAMPredictor(Tool):
         QApplication.setOverrideCursor(Qt.WaitCursor)
         self.infoMessage.emit("Segmentation is ongoing..")
         self.log.emit("[TOOL][SAMPREDICTOR] Segmentation begins..")
-
-        # load network if necessary
-        self.loadNetwork()
 
         # Point(s) passed from GUI
         points_to_use = np.asarray(self.pick_points.points).astype(int)
@@ -172,9 +175,8 @@ class SAMPredictor(Tool):
         # Set the resized image
         self.sampredictor_net.set_image(image_resized)
 
-        # Transform the points to torch
+        # Transform the points, create labels
         input_points = points_resized.astype(int)
-        input_points = np.reshape(input_points, )
         input_labels = np.array([1] * len(points_resized))
 
         # Make prediction given points
@@ -248,13 +250,24 @@ class SAMPredictor(Tool):
             models_dir = os.path.join(self.viewerplus.taglab_dir, "models")
             path = os.path.join(models_dir, modelName + '.pth')
 
-            device = torch.device("cuda:" + str(0) if torch.cuda.is_available() else "cpu")
+            if not os.path.exists(path):
 
-            # Loading the mode, returning the predictor
-            sam_model = sam_model_registry[self.sam_model_type](checkpoint=path)
-            sam_model.to(device=device)
-            self.sampredictor_net = SamPredictor(sam_model)
-            self.device = device
+                # Create a box with a warning
+                box = QMessageBox()
+                box.setText(f"Model weights {self.sam_model_type} cannot be found in models folder.\n"
+                            f"If they have not been downloaded, re-run the install script.")
+                box.exec()
+                # Go back to GUI without closing program
+
+            else:
+                # Set the device; users should be using a CUDA GPU, otherwise tool is slow
+                device = torch.device("cuda:" + str(0) if torch.cuda.is_available() else "cpu")
+
+                # Loading the model, returning the predictor
+                sam_model = sam_model_registry[self.sam_model_type](checkpoint=path)
+                sam_model.to(device=device)
+                self.sampredictor_net = SamPredictor(sam_model)
+                self.device = device
 
     def resetNetwork(self):
 
