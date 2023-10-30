@@ -151,7 +151,7 @@ class Annotation(QObject):
 
     def getFreeId(self):
         used = []
-        for blob  in self.seg_blobs:
+        for blob in self.seg_blobs:
             used.append(blob.id)
         for id in range(len(used)):
             if id not in used:

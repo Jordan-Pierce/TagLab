@@ -230,13 +230,14 @@ class TagLab(QMainWindow):
                                                     flatbuttonstyle2, self.bricksSegmentation)
 
         # Split blob operation removed from the toolbar
-        # self.btnSplitBlob   = self.newButton("split.png",    "Split Blob",            flatbuttonstyle1, self.splitBlob)
+        # self.btnSplitBlob = self.newButton("split.png", "Split Blob", flatbuttonstyle1, self.splitBlob)
 
         self.btnRuler = self.newButton("ruler.png", "Measure tool", flatbuttonstyle1, self.ruler)
         self.btnDeepExtreme = self.newButton("dexter.png", "4-clicks segmentation", flatbuttonstyle2, self.deepExtreme)
         self.btnRitm = self.newButton("ritm.png", "Positive/negative clicks segmentation", flatbuttonstyle2, self.ritm)
         self.btnAutoClassification = self.newButton("auto.png", "Fully auto semantic segmentation", flatbuttonstyle2, self.selectClassifier)
-        self.btnSAMPredictor = self.newButton("meta.png", "SAM Predictor", flatbuttonstyle2, self.samPredictor)
+        self.btnSAMPredictor = self.newButton("sampred.png", "SAM Predictor", flatbuttonstyle2, self.samPredictor)
+        self.btnSAMGenerator = self.newButton("samgen.png", "SAM Generator", flatbuttonstyle2, self.samGenerator)
 
         # Split Screen operation removed from the toolbar
         self.pxmapSeparator = QPixmap(os.path.join(os.path.join(self.taglab_dir, "icons"), "separator.png"))
@@ -272,6 +273,7 @@ class TagLab(QMainWindow):
         layout_tools.addWidget(self.btnRuler)
         layout_tools.addWidget(self.btnAutoClassification)
         layout_tools.addWidget(self.btnSAMPredictor)
+        layout_tools.addWidget(self.btnSAMGenerator)
 
         layout_tools.addSpacing(3)
         layout_tools.addWidget(self.labelSeparator)
@@ -620,6 +622,7 @@ class TagLab(QMainWindow):
         self.deepextreme_net = None
         self.classifier = None
         self.sampredictor_net = None
+        self.samgenerator_net = None
 
         # a dirty trick to adjust all the size..
         self.showMinimized()
@@ -1597,10 +1600,6 @@ class TagLab(QMainWindow):
         elif event.key() == Qt.Key_Delete:
             self.deleteSelectedBlobs()
 
-        elif event.key() == Qt.Key_X:
-            # ACTIVATE "SAM Predictor" TOOL
-            self.samPredictor()
-
         elif event.key() == Qt.Key_B:
             self.attachBoundaries()
 
@@ -1680,6 +1679,14 @@ class TagLab(QMainWindow):
         elif event.key() == Qt.Key_0:
             # FULLY AUTOMATIC SEGMENTATION
             self.selectClassifier()
+
+        elif event.key() == Qt.Key_X:
+            # ACTIVATE "SAM Predictor" TOOL
+            self.samPredictor()
+
+        elif event.key() == Qt.Key_Y:
+            # ACTIVATE "SAM Generator" TOOL
+            self.samPredictor()
 
         elif event.key() == Qt.Key_Q:
             # toggle fill
@@ -2344,6 +2351,7 @@ class TagLab(QMainWindow):
         self.btnMatch.setChecked(False)
         self.btnAutoClassification.setChecked(False)
         self.btnSAMPredictor.setChecked(False)
+        self.btnSAMGenerator.setChecked(False)
 
         if self.scale_widget is not None:
             self.scale_widget.close()
@@ -2363,7 +2371,8 @@ class TagLab(QMainWindow):
             "DEEPEXTREME": ["4-click", self.btnDeepExtreme],
             "MATCH": ["Match", self.btnMatch],
             "RITM": ["Ritm", self.btnRitm],
-            "SAMPREDICTOR": ["SAM", self.btnSAMPredictor]
+            "SAMPREDICTOR": ["SAM Predictor", self.btnSAMPredictor],
+            "SAMGENERATOR": ["SAM Generator", self.btnSAMGenerator]
         }
         newtool = tools[tool]
         self.resetToolbar()
@@ -2487,6 +2496,13 @@ class TagLab(QMainWindow):
         last point selected (left-click) while pressing the Shift key (i.e., left-click + Shift activates SAM).
         """
         self.setTool("SAMPREDICTOR")
+
+    @pyqtSlot()
+    def samGenerator(self):
+        """
+        Activate the "SAM Generator" tool.
+        """
+        self.setTool("SAMGENERATOR")
 
     @pyqtSlot()
     def ritm(self):
@@ -3355,7 +3371,8 @@ class TagLab(QMainWindow):
                        self.btnAutoClassification,
                        self.btnCreateGrid,
                        self.btnGrid,
-                       self.btnSAMPredictor]:
+                       self.btnSAMPredictor,
+                       self.btnSAMGenerator]:
 
             button.setEnabled(len(self.project.images) > 0)
 
@@ -4456,6 +4473,10 @@ class TagLab(QMainWindow):
         if self.sampredictor_net is not None:
             del self.sampredictor_net
             self.sampredictor_net = None
+
+        if self.samgenerator_net is not None:
+            del self.samgenerator_net
+            self.samgenerator_net = None
 
     @pyqtSlot()
     def selectClassifier(self):

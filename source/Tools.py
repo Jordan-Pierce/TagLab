@@ -5,7 +5,6 @@ from source.tools.EditPoints import EditPoints
 from source.tools.Scribbles import Scribbles
 from source.tools.CorrectivePoints import CorrectivePoints
 
-
 from source.tools.CreateCrack import CreateCrack
 from source.tools.SplitBlob import SplitBlob
 from source.tools.Assign import Assign
@@ -20,7 +19,7 @@ from source.tools.Match import Match
 from source.tools.SelectArea import SelectArea
 from source.tools.Ritm import Ritm
 from source.tools.SAMPredictor import SAMPredictor
-
+from source.tools.SAMGenerator import SAMGenerator
 
 
 class Tools(object):
@@ -36,7 +35,7 @@ class Tools(object):
         self.corrective_points = CorrectivePoints(self.scene)
 
         self.CROSS_LINE_WIDTH = 2
-        self.extreme_pick_style = {'width': self.CROSS_LINE_WIDTH, 'color': Qt.red,  'size': 6}
+        self.extreme_pick_style = {'width': self.CROSS_LINE_WIDTH, 'color': Qt.red, 'size': 6}
 
         # DATA FOR THE CREATECRACK TOOL
         self.crackWidget = None
@@ -57,7 +56,8 @@ class Tools(object):
             "MATCH": Match(self.viewerplus),
             "SELECTAREA": SelectArea(self.viewerplus, self.pick_points),
             "RITM": Ritm(self.viewerplus, self.corrective_points),
-            "SAMPREDICTOR": SAMPredictor(self.viewerplus, self.pick_points)
+            "SAMPREDICTOR": SAMPredictor(self.viewerplus, self.pick_points),
+            "SAMGENERATOR": SAMGenerator(self.viewerplus, self.pick_points)
         }
         # connect infomessage, log, blobinfo for   all tools with self.infoWidget.setInfoMessage(
 
@@ -78,6 +78,7 @@ class Tools(object):
         self.tools["RITM"].reset()
         self.tools["SELECTAREA"].reset()
         self.tools["SAMPREDICTOR"].reset()
+        self.tools["SAMGENERATOR"].reset()
 
         if self.tool == "AUTOCLASS":
             self.corals_classifier.stopProcessing()
@@ -95,13 +96,13 @@ class Tools(object):
             self.viewerplus.bricksWidget.close()
         self.viewerplus.bricksWidget = None
 
-    #logfile, annotations, selecttion, activelabelbname, undo
-    def leftPressed(self, x, y, mods = None):
+    # logfile, annotations, selecttion, activelabelbname, undo
+    def leftPressed(self, x, y, mods=None):
         if self.tool == "MOVE":
             return
         self.tools[self.tool].leftPressed(x, y, mods)
 
-    def rightPressed(self, x, y, mods = None):
+    def rightPressed(self, x, y, mods=None):
         if self.tool == "RITM":
             self.tools[self.tool].rightPressed(x, y, mods)
 

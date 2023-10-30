@@ -3,7 +3,6 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication, QMessageBox
 from PyQt5.QtGui import QImage, QPen, QBrush
 
-
 from source.tools.Tool import Tool
 from source import utils
 
@@ -11,17 +10,12 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-try:
-    import torch
-    from torch.nn.functional import interpolate
-except Exception as e:
-    print("Incompatible version between pytorch, cuda and python.\n" +
-          "Knowing working version combinations are\n: Cuda 10.0, pytorch 1.0.0, python 3.6.8" + str(e))
+import torch
+
+from segment_anything import sam_model_registry
+from segment_anything import SamPredictor
 
 from models.dataloaders import helpers as helpers
-
-from segment_anything import SamPredictor
-from segment_anything import sam_model_registry
 
 
 class SAMPredictor(Tool):
@@ -201,10 +195,10 @@ class SAMPredictor(Tool):
         left_map_pos = points[:, 0].min() - self.pad
         top_map_pos = points[:, 1].min() - self.pad
 
-        (img, points_new) = self.prepareForSAMPredictor()
+        (img, points_ori) = self.prepareForSAMPredictor()
 
         # Points in img coordinate space
-        points_ori = points_new.astype(int)
+        points_ori = points_ori.astype(int)
         #  Padding of points by amount pad
         bbox = helpers.get_bbox(img, points=points_ori, pad=self.pad, zero_pad=True)
         # Cropping the image, and resizing it

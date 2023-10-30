@@ -68,7 +68,6 @@ class Blob(object):
         self.qpath = None
         self.qpath_gitem = None
 
-
         if region:
 
             # extract properties
