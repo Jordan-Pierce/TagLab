@@ -1,7 +1,8 @@
 import cv2
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication, QMessageBox
-from PyQt5.QtGui import QImage
+from PyQt5.QtGui import QImage, QPen, QBrush
+
 
 from source.tools.Tool import Tool
 from source import utils
@@ -30,6 +31,8 @@ class SAMPredictor(Tool):
 
         # Image is resized to
         self.resize_to = 2048
+        # Padding amount
+        self.pad = 0
         # Model Type (b, l, or h)
         self.sam_model_type = 'vit_l'
         # Mask score threshold
@@ -37,10 +40,15 @@ class SAMPredictor(Tool):
         # For debugging
         self.debug = False
 
-        self.CROSS_LINE_WIDTH = 2
-        self.pick_style = {'width': self.CROSS_LINE_WIDTH, 'color': Qt.red, 'size': 6}
+        # SAM, CUDA or CPU
         self.sampredictor_net = None
         self.device = None
+
+        # Drawing on GUI
+        self.CROSS_LINE_WIDTH = 2
+        self.pick_style = {'width': self.CROSS_LINE_WIDTH, 'color': Qt.red, 'size': 6}
+        self.work_area_bbox = None
+        self.work_area_item = None
 
     def leftPressed(self, x, y, mods):
 
@@ -58,7 +66,10 @@ class SAMPredictor(Tool):
                 self.pick_points.addPoint(x, y, self.pick_style)
                 message = "[TOOL][SAMPREDICTOR] New point picked (" + str(len(points)) + ")"
                 self.log.emit(message)
-
+                # Update working area
+                self.getPadding()
+                self.getWorkArea()
+                # Segment with SAM
                 self.segmentWithSAMPredictor()
                 self.pick_points.reset()
 
@@ -68,6 +79,9 @@ class SAMPredictor(Tool):
                 self.pick_points.addPoint(x, y, self.pick_style)
                 message = "[TOOL][SAMPREDICTOR] New point picked (" + str(len(points)) + ")"
                 self.log.emit(message)
+                # Update working area
+                self.getPadding()
+                self.getWorkArea()
 
             # Last Click
             # There are existing points, and the latest point was clicked with shift
@@ -75,20 +89,79 @@ class SAMPredictor(Tool):
                 self.pick_points.addPoint(x, y, self.pick_style)
                 message = "[TOOL][SAMPREDICTOR] New point picked (" + str(len(points)) + ")"
                 self.log.emit(message)
-
+                # Update working area
+                self.getPadding()
+                self.getWorkArea()
+                # Segment with SAM
                 self.segmentWithSAMPredictor()
                 self.pick_points.reset()
 
-    def prepareForSAMPredictor(self, points, pad_max):
+    def getPadding(self):
         """
-        Crop the image map (QImage) and return a NUMPY array containing it.
-        It returns also the coordinates of the bounding box on the cropped image.
+        Get the padding amount based on the location of point(s)
         """
 
-        left = points[:, 0].min() - pad_max
-        right = points[:, 0].max() + pad_max
-        top = points[:, 1].min() - pad_max
-        bottom = points[:, 1].max() + pad_max
+        # Point(s) passed from GUI
+        points = np.asarray(self.pick_points.points).astype(int)
+
+        # Shape of the mosaic
+        width = self.viewerplus.img_map.size().width()
+        height = self.viewerplus.img_map.size().height()
+
+        # The amount to pad in all directions around the point(s)
+        # Useful as mosaics are of different sizes and fixed values
+        # would lead to bad results depending on the mosaic
+        if len(points) == 1 and np.max([width, height]) < 16000:
+            # If the mosaic is small, then we need to make the padding bigger
+            # when provided a single point as the ideal bbox size is unknown
+            pad = int(np.max([width, height]) * 0.1)
+        else:
+            # If there are multiple points, then the ideal bbox size is
+            # calculated based on the points, plus a small amount of padding
+            pad = int(np.max([width, height]) * 0.05)
+
+        self.pad = pad
+
+    def getWorkArea(self):
+        """
+        Set the work area based on the location of point(s) and padding
+        """
+        self.resetWorkArea()
+
+        points = np.asarray(self.pick_points.points).astype(int)
+
+        left = points[:, 0].min() - self.pad
+        right = points[:, 0].max() + self.pad
+        top = points[:, 1].min() - self.pad
+        bottom = points[:, 1].max() + self.pad
+        h = bottom - top
+        w = right - left
+
+        self.work_area_bbox = [round(top), round(left), round(w), round(h)]
+
+        # Display to GUI
+        brush = QBrush(Qt.NoBrush)
+        pen = QPen(Qt.DashLine)
+        pen.setWidth(2)
+        pen.setColor(Qt.white)
+        pen.setCosmetic(True)
+        x = self.work_area_bbox[1]
+        y = self.work_area_bbox[0]
+        w = self.work_area_bbox[2]
+        h = self.work_area_bbox[3]
+        self.work_area_item = self.viewerplus.scene.addRect(x, y, w, h, pen, brush)
+        self.work_area_item.setZValue(3)
+
+    def prepareForSAMPredictor(self):
+        """
+        Get the image based on point(s) location
+        """
+        points = np.asarray(self.pick_points.points).astype(int)
+
+        left = points[:, 0].min() - self.pad
+        right = points[:, 0].max() + self.pad
+        top = points[:, 1].min() - self.pad
+        bottom = points[:, 1].max() + self.pad
         h = bottom - top
         w = right - left
 
@@ -123,40 +196,23 @@ class SAMPredictor(Tool):
         self.infoMessage.emit("Segmentation is ongoing..")
         self.log.emit("[TOOL][SAMPREDICTOR] Segmentation begins..")
 
-        # Point(s) passed from GUI
-        points_to_use = np.asarray(self.pick_points.points).astype(int)
+        points = np.asarray(self.pick_points.points).astype(int)
 
-        # Shape of the mosaic
-        width = self.viewerplus.img_map.size().width()
-        height = self.viewerplus.img_map.size().height()
+        left_map_pos = points[:, 0].min() - self.pad
+        top_map_pos = points[:, 1].min() - self.pad
 
-        # The amount to pad in all directions around the point(s)
-        # Useful as mosaics are of different sizes and fixed values
-        # would lead to bad results depending on the mosaic
-        if len(points_to_use) == 1 and np.max([width, height]) < 16000:
-            # If the mosaic is small, then we need to make the padding bigger
-            # when provided a single point as the ideal bbox size is unknown
-            pad = int(np.max([width, height]) * 0.1)
-        else:
-            # If there are multiple points, then the ideal bbox size is
-            # calculated based on the points, plus a small amount of padding
-            pad = int(np.max([width, height]) * 0.05)
-
-        left_map_pos = points_to_use[:, 0].min() - pad
-        top_map_pos = points_to_use[:, 1].min() - pad
-
-        (img, points_new) = self.prepareForSAMPredictor(points_to_use, pad)
+        (img, points_new) = self.prepareForSAMPredictor()
 
         # Points in img coordinate space
         points_ori = points_new.astype(int)
         #  Padding of points by amount pad
-        bbox = helpers.get_bbox(img, points=points_ori, pad=pad, zero_pad=True)
+        bbox = helpers.get_bbox(img, points=points_ori, pad=self.pad, zero_pad=True)
         # Cropping the image, and resizing it
         image_cropped = helpers.crop_from_bbox(img, bbox, zero_pad=True)
         image_resized = helpers.fixed_resize(image_cropped, (self.resize_to, self.resize_to)).astype(np.uint8)
 
         # Generate points normalized to image values
-        points_resized = points_ori - [np.min(points_ori[:, 0]), np.min(points_ori[:, 1])] + [pad, pad]
+        points_resized = points_ori - [np.min(points_ori[:, 0]), np.min(points_ori[:, 1])] + [self.pad, self.pad]
         # Remap the input points inside the resize_to x resize_to cropped box
         points_resized = (self.resize_to * points_resized * [1 / image_cropped.shape[1], 1 / image_cropped.shape[0]])
 
@@ -234,6 +290,7 @@ class SAMPredictor(Tool):
         self.log.emit("[TOOL][SAMPREDICTOR] Segmentation ends.")
 
         QApplication.restoreOverrideCursor()
+        self.resetWorkArea()
 
     def loadNetwork(self):
 
@@ -270,12 +327,28 @@ class SAMPredictor(Tool):
                 self.device = device
 
     def resetNetwork(self):
+        """
+        Reset the network
+        """
 
         torch.cuda.empty_cache()
         if self.sampredictor_net is not None:
             del self.sampredictor_net
             self.sampredictor_net = None
 
+    def resetWorkArea(self):
+        """
+        Reset working area
+        """
+        self.work_area_bbox = [0, 0, 0, 0]
+        if self.work_area_item is not None:
+            self.viewerplus.scene.removeItem(self.work_area_item)
+            self.work_area_item = None
+
     def reset(self):
+        """
+        Reset everything
+        """
         self.resetNetwork()
         self.pick_points.reset()
+        self.resetWorkArea()
