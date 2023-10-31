@@ -34,6 +34,10 @@ class SAMPredictor(Tool):
         # For debugging
         self.debug = False
 
+        # Mosaic dimensions
+        self.width = None
+        self.height = None
+
         # SAM, CUDA or CPU
         self.sampredictor_net = None
         self.device = None
@@ -98,21 +102,17 @@ class SAMPredictor(Tool):
         # Point(s) passed from GUI
         points = np.asarray(self.pick_points.points).astype(int)
 
-        # Shape of the mosaic
-        width = self.viewerplus.img_map.size().width()
-        height = self.viewerplus.img_map.size().height()
-
         # The amount to pad in all directions around the point(s)
         # Useful as mosaics are of different sizes and fixed values
         # would lead to bad results depending on the mosaic
-        if len(points) == 1 and np.max([width, height]) < 16000:
+        if len(points) == 1 and np.max([self.width, self.height]) < 16000:
             # If the mosaic is small, then we need to make the padding bigger
             # when provided a single point as the ideal bbox size is unknown
-            pad = int(np.max([width, height]) * 0.1)
+            pad = int(np.max([self.width, self.height]) * 0.1)
         else:
             # If there are multiple points, then the ideal bbox size is
             # calculated based on the points, plus a small amount of padding
-            pad = int(np.max([width, height]) * 0.05)
+            pad = int(np.max([self.width, self.height]) * 0.05)
 
         self.pad = pad
 
@@ -190,11 +190,18 @@ class SAMPredictor(Tool):
         self.infoMessage.emit("Segmentation is ongoing..")
         self.log.emit("[TOOL][SAMPREDICTOR] Segmentation begins..")
 
+        # Mosaic dimensions
+        self.width = self.viewerplus.img_map.size().width()
+        self.height = self.viewerplus.img_map.size().height()
+
+        # User defined points in GUI
         points = np.asarray(self.pick_points.points).astype(int)
 
+        # Top-left corner of work area in GUI
         left_map_pos = points[:, 0].min() - self.pad
         top_map_pos = points[:, 1].min() - self.pad
 
+        # Image from work area, and points w/ transformed coordinates
         (img, points_ori) = self.prepareForSAMPredictor()
 
         # Points in img coordinate space

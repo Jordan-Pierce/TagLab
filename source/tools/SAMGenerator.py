@@ -35,6 +35,10 @@ class SAMGenerator(Tool):
         # For debugging
         self.debug = False
 
+        # Mosaic dimensions
+        self.width = None
+        self.height = None
+
         # SAM, CUDA or CPU
         self.samgenerator_net = None
         self.device = None
@@ -68,7 +72,6 @@ class SAMGenerator(Tool):
                 self.log.emit(message)
                 # Segment with SAM
                 self.segmentWithSAMGenerator()
-
 
     def getWorkArea(self):
         """
@@ -114,6 +117,10 @@ class SAMGenerator(Tool):
         self.log.emit("[TOOL][SAMGENERATOR] Segmentation begins..")
         QApplication.setOverrideCursor(Qt.WaitCursor)
 
+        # Mosaic dimensions
+        self.width = self.viewerplus.img_map.size().width()
+        self.height = self.viewerplus.img_map.size().height()
+
         # Get the work area top-left
         left_map_pos = self.work_area_bbox[1]
         top_map_pos = self.work_area_bbox[0]
@@ -129,54 +136,26 @@ class SAMGenerator(Tool):
 
         for idx, generated_output in enumerate(generated_outputs):
 
-            # Extract the output
-            mask_resized = generated_output['segmentation']
+            # Extract the generated output
             area = generated_output['area']
-            stable_score = generated_output['stability_score']
+            mask_resized = generated_output['segmentation']
+            # Maybe use to filter masks?
             iou_score = generated_output['predicted_iou']
+            stable_score = generated_output['stability_score']
+            # Image dimensions
             crop_box = generated_output['crop_box']
-            x, y, w, h = generated_output['bbox']
-            x2, y2 = x + w, y + h
+            # Region contain masked object
+            bbox = generated_output['bbox']
 
-            # Remove masks that form at the boundaries of images?
-            # May remove this if users prefer to keep those and clean
-            # manually.
-            eps = 5
-
-            if 0 in [x, y] or x2 >= mask_resized.shape[1] - eps or y2 >= mask_resized.shape[0] - eps:
-                continue
-
-            # Resize mask back to original cropped size
+            # Resize mask back to original cropped size using pytorch as it's faster
             mask_cropped = cv2.resize(mask_resized.astype(float),
                                       (image_cropped.shape[1], image_cropped.shape[0]),
                                       cv2.INTER_NEAREST).astype(int)
 
-            # Calculate scale
-            x_scale = mask_cropped.shape[1] / mask_resized.shape[1]
-            y_scale = mask_cropped.shape[0] / mask_resized.shape[0]
+            # Create a blob manually using provided information
+            blob = self.createBlob(mask_resized, mask_cropped, bbox, left_map_pos, top_map_pos)
 
-            try:
-                # Create region manually since information is available;
-                # It's also much faster than using scikit measure...
-
-                # Inside a try block because scikit complains, but still
-                # takes the values anyways
-                region = regionprops(mask_cropped)[0]
-                region.label = 1
-                region.bbox = (x * x_scale,
-                               y * y_scale,
-                               (x + w) * x_scale,
-                               (y + h) * y_scale)
-                region.area = np.sum(mask_cropped)
-                region.centroid = np.mean(np.argwhere(mask_cropped), axis=0)
-            except:
-                pass
-
-            blob_id = self.viewerplus.annotations.getFreeId()
-            blob = Blob(region, left_map_pos, top_map_pos, blob_id)
-
-            # Exclude all masks outside of mosaic
-            if np.all(blob.bbox >= 0):
+            if blob:
                 self.viewerplus.addBlob(blob, selected=True)
                 self.blobInfo.emit(blob, "[TOOL][SAMGENERATOR][BLOB-CREATED]")
             self.viewerplus.saveUndo()
@@ -185,6 +164,83 @@ class SAMGenerator(Tool):
         self.infoMessage.emit("Segmentation done.")
         self.log.emit("[TOOL][SAMGENERATOR] Segmentation ends.")
         self.resetWorkArea()
+
+    def createBlob(self, mask_src, mask_dst, bbox_src, left_map_pos, top_map_pos):
+        """
+        Create a blob manually given the generated mask
+        """
+
+        # Bbox of the area of interest before scaled
+        x1_src, y1_src, w_src, h_src = bbox_src
+        x2_src, y2_src = x1_src + w_src, y1_src + h_src
+
+        # Calculate scale
+        x_scale = mask_dst.shape[1] / mask_src.shape[1]
+        y_scale = mask_dst.shape[0] / mask_src.shape[0]
+
+        # New coordinates
+        x1_dst = x1_src * x_scale
+        y1_dst = y1_src * y_scale
+        w_dst = w_src * x_scale
+        h_dst = h_src * y_scale
+
+        x2_dst = x1_dst + w_dst
+        y2_dst = y1_dst + h_dst
+
+        # Bbox of the area of interest after scaled
+        bbox_dst = (x1_dst, y1_dst, (x1_dst + w_dst), (y1_dst + h_dst))
+
+        # ********************************************************
+        # Remove masks that form at the boundaries?
+        # May remove this if users prefer to keep those and clean
+        # them manually afterwards, but it appears to be more work
+        # ********************************************************
+        eps = 3
+
+        # Is the mask along the:
+        min_mosaic = True
+        max_mosaic = True
+        min_image = True
+        max_image = True
+
+        # If below the minimum boundaries of mosaic, that's not okay
+        if np.all(np.array([x1_dst, y1_dst, x2_dst, y2_dst]) >= 0):
+            min_mosaic = False
+
+        # If along the maximum boundaries of mosaic, that's okay
+        if x2_dst <= self.width or y2_dst <= self.height:
+            max_mosaic = False
+
+        # If along any of the minimum boundaries of resized image, that's not okay
+        if np.all(np.array([x1_src, y1_src]) >= 0 + eps):
+            min_image = False
+
+        # If along any of the minimum boundaries of resized image, that's not okay
+        if x2_src <= mask_src.shape[1] - eps and y2_src <= mask_src.shape[0] - eps:
+            max_image = False
+
+        # If any of the above conditions are true, don't keep mask
+        if np.any(np.array([min_mosaic, max_mosaic, min_image, max_image])):
+            return None
+
+        try:
+            # Create region manually since information is available;
+            # It's also much faster than using scikit measure
+
+            # Inside a try block because scikit complains, but still
+            # takes the values anyway
+            region = regionprops(mask_dst)[0]
+            region.label = 1
+            region.bbox = bbox_dst
+            region.area = np.sum(mask_dst)
+            region.centroid = np.mean(np.argwhere(mask_dst), axis=0)
+        except:
+            pass
+
+        blob_id = self.viewerplus.annotations.getFreeId()
+        blob = Blob(region, left_map_pos, top_map_pos, blob_id)
+
+        return blob
 
     def loadNetwork(self):
 
