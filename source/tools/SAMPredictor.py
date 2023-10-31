@@ -1,14 +1,15 @@
-import cv2
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication, QMessageBox
 from PyQt5.QtGui import QImage, QPen, QBrush
 
+from source.Blob import Blob
 from source.tools.Tool import Tool
 from source import utils
 
 import os
+import cv2
 import numpy as np
-import matplotlib.pyplot as plt
+from skimage.measure import regionprops
 
 import torch
 
@@ -49,6 +50,10 @@ class SAMPredictor(Tool):
         self.work_area_item = None
 
     def leftPressed(self, x, y, mods):
+
+        # Mosaic dimensions
+        self.width = self.viewerplus.img_map.size().width()
+        self.height = self.viewerplus.img_map.size().height()
 
         # Load Network in the beginning
         self.loadNetwork()
@@ -146,6 +151,12 @@ class SAMPredictor(Tool):
         self.work_area_item = self.viewerplus.scene.addRect(x, y, w, h, pen, brush)
         self.work_area_item.setZValue(3)
 
+    def resizeArray(self, arr, shape):
+        """
+        Resize array; expects 2D array.
+        """
+        return cv2.resize(arr.astype(float), shape, cv2.INTER_NEAREST).astype(int)
+
     def prepareForSAMPredictor(self):
         """
         Get the image based on point(s) location
@@ -190,10 +201,6 @@ class SAMPredictor(Tool):
         self.infoMessage.emit("Segmentation is ongoing..")
         self.log.emit("[TOOL][SAMPREDICTOR] Segmentation begins..")
 
-        # Mosaic dimensions
-        self.width = self.viewerplus.img_map.size().width()
-        self.height = self.viewerplus.img_map.size().height()
-
         # User defined points in GUI
         points = np.asarray(self.pick_points.points).astype(int)
 
@@ -217,18 +224,6 @@ class SAMPredictor(Tool):
         # Remap the input points inside the resize_to x resize_to cropped box
         points_resized = (self.resize_to * points_resized * [1 / image_cropped.shape[1], 1 / image_cropped.shape[0]])
 
-        if self.debug:
-            os.makedirs("debug/", exist_ok=True)
-            plt.figure(figsize=(10, 10))
-            plt.subplot(2, 1, 1)
-            plt.imshow(img)
-            plt.scatter(points_ori.T[0], points_ori.T[1], c='red', s=100)
-            plt.subplot(2, 1, 2)
-            plt.imshow(image_resized)
-            plt.scatter(points_resized.T[0], points_resized.T[1], c='red', s=100)
-            plt.savefig(r"debug\PointsOutput.png")
-            plt.close()
-
         # Set the resized image
         self.sampredictor_net.set_image(image_resized)
 
@@ -241,57 +236,126 @@ class SAMPredictor(Tool):
                                                            point_labels=input_labels,
                                                            multimask_output=False)
 
-        # If it's a good mask, else return nothing to GUI
-        if score.squeeze() >= self.score_threshold:
-            mask = mask.squeeze().astype(float)
-        else:
+        # If mask score is too low, just return early
+        if score.squeeze() < self.score_threshold:
             self.infoMessage.emit("Predicted mask score is too low, skipping...")
-            mask = np.zeros(shape=image_resized.shape[0:2], dtype=float)
+        else:
+            # Get the mask as a float
+            mask_resized = mask.squeeze().astype(float)
 
-        # Resize the mask to be the same dimensions as original image
-        segm_mask = helpers.crop2fullmask(mask,
-                                          bbox,
-                                          im_size=img.shape[:2],
-                                          zero_pad=True,
-                                          relax=0).astype(np.uint8)
+            # Get the cropped mask, given the bbox and original image
+            mask_cropped = helpers.crop2fullmask(mask_resized,
+                                                 bbox,
+                                                 im_size=img.shape[:2],
+                                                 zero_pad=True,
+                                                 relax=0).astype(np.uint8)
 
-        # Smooth mask after being resized
-        kernel = np.ones((3, 3), np.uint8)
-        segm_mask = cv2.morphologyEx(segm_mask, cv2.MORPH_CLOSE, kernel, iterations=3)
+            # Region contain masked object
+            indices = np.argwhere(mask_cropped)
 
-        if self.debug:
-            plt.figure(figsize=(10, 10))
-            plt.subplot(2, 1, 1)
-            plt.imshow(img)
-            plt.imshow(segm_mask, alpha=0.5)
-            plt.scatter(points_ori.T[0], points_ori.T[1], c='red', s=100)
-            plt.subplot(2, 1, 2)
-            plt.imshow(image_resized)
-            plt.imshow(mask, alpha=0.5)
-            plt.scatter(points_resized.T[0], points_resized.T[1], c='red', s=100)
-            plt.savefig(r"debug\SegmentationOutput.png")
-            plt.close()
+            # Calculate the x, y, width, and height
+            x = indices[:, 1].min()
+            y = indices[:, 0].min()
+            w = indices[:, 1].max() - x + 1
+            h = indices[:, 0].max() - y + 1
+            bbox = np.array([x, y, w, h])
 
-        # TODO: move this function to blob!!!
-        # SAM Masks shouldn't have multiple blobs (ideally), so only keep largest
-        blobs = self.viewerplus.annotations.blobsFromMask(segm_mask,
-                                                          left_map_pos,
-                                                          top_map_pos,
-                                                          area_mask=1000,
-                                                          keep_only_largest=True)
+            # Resize mask back to cropped size
+            target_shape = (image_cropped.shape[:2][::-1])
+            mask_cropped = self.resizeArray(mask_cropped, target_shape)
 
-        self.viewerplus.resetSelection()
+            # Create a blob manually using provided information
+            blob = self.createBlob(mask_resized, mask_cropped, bbox, left_map_pos, top_map_pos)
 
-        for blob in blobs:
-            self.viewerplus.addBlob(blob, selected=True)
-            self.blobInfo.emit(blob, "[TOOL][SAMPREDICTOR][BLOB-CREATED]")
-        self.viewerplus.saveUndo()
+            self.viewerplus.resetSelection()
+
+            if blob:
+                self.viewerplus.addBlob(blob, selected=True)
+                self.blobInfo.emit(blob, "[TOOL][SAMPREDICTOR][BLOB-CREATED]")
+            self.viewerplus.saveUndo()
 
         self.infoMessage.emit("Segmentation done.")
         self.log.emit("[TOOL][SAMPREDICTOR] Segmentation ends.")
 
         QApplication.restoreOverrideCursor()
         self.resetWorkArea()
+
+    def createBlob(self, mask_src, mask_dst, bbox_src, left_map_pos, top_map_pos):
+        """
+        Create a blob manually given the generated mask
+        """
+
+        # Bbox of the area of interest before scaled
+        x1_src, y1_src, w_src, h_src = bbox_src
+        x2_src, y2_src = x1_src + w_src, y1_src + h_src
+
+        # Calculate scale
+        x_scale = mask_dst.shape[1] / mask_src.shape[1]
+        y_scale = mask_dst.shape[0] / mask_src.shape[0]
+
+        # New coordinates
+        x1_dst = x1_src * x_scale
+        y1_dst = y1_src * y_scale
+        w_dst = w_src * x_scale
+        h_dst = h_src * y_scale
+
+        x2_dst = x1_dst + w_dst
+        y2_dst = y1_dst + h_dst
+
+        # Bbox of the area of interest after scaled
+        bbox_dst = (x1_dst, y1_dst, (x1_dst + w_dst), (y1_dst + h_dst))
+
+        # ********************************************************
+        # Remove masks that form at the boundaries?
+        # May remove this if users prefer to keep those and clean
+        # them manually afterwards, but it appears to be more work
+        # ********************************************************
+        eps = 3
+
+        # Is the mask along the:
+        min_mosaic = True
+        max_mosaic = True
+        min_image = True
+        max_image = True
+
+        # If below the minimum boundaries of mosaic, that's not okay
+        if np.all(np.array([x1_dst, y1_dst, x2_dst, y2_dst]) >= 0):
+            min_mosaic = False
+
+        # If along the maximum boundaries of mosaic, that's okay
+        if x2_dst <= self.width or y2_dst <= self.height:
+            max_mosaic = False
+
+        # If along any of the minimum boundaries of resized image, that's not okay
+        if np.all(np.array([x1_src, y1_src]) >= 0 + eps):
+            min_image = False
+
+        # If along any of the minimum boundaries of resized image, that's not okay
+        if x2_src <= mask_src.shape[1] - eps and y2_src <= mask_src.shape[0] - eps:
+            max_image = False
+
+        # If any of the above conditions are true, don't keep mask
+        if np.any(np.array([min_mosaic, max_mosaic, min_image, max_image])):
+            return None
+
+        try:
+            # Create region manually since information is available;
+            # It's also much faster than using scikit measure
+
+            # Inside a try block because scikit complains, but still
+            # takes the values anyway
+            region = sorted(regionprops(mask_dst), key=lambda r: r.area, reverse=True)[0]
+            region.label = 1
+            region.bbox = bbox_dst
+            region.area = np.sum(mask_dst)
+            region.centroid = np.mean(np.argwhere(mask_dst), axis=0)
+        except:
+            pass
+
+        blob_id = self.viewerplus.annotations.getFreeId()
+        blob = Blob(region, left_map_pos, top_map_pos, blob_id)
+
+        return blob
 
     def loadNetwork(self):
 

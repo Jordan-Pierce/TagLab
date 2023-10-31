@@ -44,8 +44,6 @@ class SAMGenerator(Tool):
         self.device = None
 
         # Drawing on GUI
-        self.CROSS_LINE_WIDTH = 2
-        self.pick_style = {'width': self.CROSS_LINE_WIDTH, 'color': Qt.red, 'size': 6}
         self.work_area_bbox = None
         self.work_area_item = None
 
@@ -98,6 +96,12 @@ class SAMGenerator(Tool):
         self.work_area_item = self.viewerplus.scene.addRect(x, y, w, h, pen, brush)
         self.work_area_item.setZValue(3)
 
+    def resizeArray(self, arr, shape):
+        """
+        Resize array; expects 2D array.
+        """
+        return cv2.resize(arr.astype(float), shape, cv2.INTER_NEAREST).astype(int)
+
     def prepareForSAMGenerator(self):
         """
         Obtain the image from defined work area
@@ -139,7 +143,7 @@ class SAMGenerator(Tool):
             # Extract the generated output
             area = generated_output['area']
             mask_resized = generated_output['segmentation']
-            # Maybe use to filter masks?
+            # Maybe use these to filter masks?
             iou_score = generated_output['predicted_iou']
             stable_score = generated_output['stability_score']
             # Image dimensions
@@ -147,10 +151,9 @@ class SAMGenerator(Tool):
             # Region contain masked object
             bbox = generated_output['bbox']
 
-            # Resize mask back to original cropped size using pytorch as it's faster
-            mask_cropped = cv2.resize(mask_resized.astype(float),
-                                      (image_cropped.shape[1], image_cropped.shape[0]),
-                                      cv2.INTER_NEAREST).astype(int)
+            # Resize mask back to cropped size
+            target_shape = (image_cropped.shape[:2][::-1])
+            mask_cropped = self.resizeArray(mask_resized, target_shape)
 
             # Create a blob manually using provided information
             blob = self.createBlob(mask_resized, mask_cropped, bbox, left_map_pos, top_map_pos)
@@ -229,7 +232,7 @@ class SAMGenerator(Tool):
 
             # Inside a try block because scikit complains, but still
             # takes the values anyway
-            region = regionprops(mask_dst)[0]
+            region = sorted(regionprops(mask_dst), key=lambda r: r.area, reverse=True)[0]
             region.label = 1
             region.bbox = bbox_dst
             region.area = np.sum(mask_dst)
