@@ -23,6 +23,7 @@ from models.dataloaders import helpers as helpers
 class SAMPredictor(Tool):
     def __init__(self, viewerplus, pick_points):
         super(SAMPredictor, self).__init__(viewerplus)
+        # User defined points
         self.pick_points = pick_points
 
         # Image is resized to
@@ -53,25 +54,12 @@ class SAMPredictor(Tool):
         self.work_area_bbox = None
         self.work_area_item = None
 
-    def initalize(self):
-
-        # Mosaic dimensions
-        self.width = self.viewerplus.img_map.size().width()
-        self.height = self.viewerplus.img_map.size().height()
-
-        # Load Network in the beginning
-        self.loadNetwork()
-
     def rightPressed(self, x, y, mods):
         """
         Negative points
         """
 
-        self.initalize()
-
-        # If the weights are there, continue
-        if self.sampredictor_net:
-
+        if mods != Qt.ShiftModifier:
             self.pick_points.addPoint(x, y, self.neg_pick_style)
             self.labels.append(0)
             message = "[TOOL][SAMPREDICTOR] New point picked"
@@ -85,50 +73,53 @@ class SAMPredictor(Tool):
         Positive points
         """
 
-        self.initalize()
+        points = self.pick_points.points
 
-        # If the weights are there, continue
-        if self.sampredictor_net:
+        # Single-Click Segmentation
+        # There are no existing points, but there is a Click + Shift
+        if not points and mods == Qt.ShiftModifier:
+            self.pick_points.addPoint(x, y, self.pos_pick_style)
+            self.labels.append(1)
+            message = "[TOOL][SAMPREDICTOR] New point picked"
+            self.log.emit(message)
+            # Update working area
+            self.getPadding()
+            self.getWorkArea()
+            # Segment with SAM
+            self.loadNetwork()
+            self.segmentWithSAMPredictor()
+            self.resetWorkArea()
+            self.pick_points.reset()
+            self.labels = []
 
-            points = self.pick_points.points
+        # There is a Click without Shift
+        elif mods != Qt.ShiftModifier:
+            self.pick_points.addPoint(x, y, self.pos_pick_style)
+            self.labels.append(1)
+            message = "[TOOL][SAMPREDICTOR] New point picked"
+            self.log.emit(message)
+            # Update working area
+            self.getPadding()
+            self.getWorkArea()
 
-            # Single-Click Segmentation
-            # There are no existing points, but there is a Click + Shift
-            if not points and mods == Qt.ShiftModifier:
-                self.pick_points.addPoint(x, y, self.pos_pick_style)
-                self.labels.append(1)
-                message = "[TOOL][SAMPREDICTOR] New point picked"
-                self.log.emit(message)
-                # Update working area
-                self.getPadding()
-                self.getWorkArea()
-                # Segment with SAM
-                self.segmentWithSAMPredictor()
-                self.pick_points.reset()
-                self.labels = []
-
-            # There is a Click without Shift
-            elif mods != Qt.ShiftModifier:
-                self.pick_points.addPoint(x, y, self.pos_pick_style)
-                self.labels.append(1)
-                message = "[TOOL][SAMPREDICTOR] New point picked"
-                self.log.emit(message)
-                # Update working area
-                self.getPadding()
-                self.getWorkArea()
-
-            # There are existing points, and there is a Click + Shift
-            elif len(points) and mods == Qt.ShiftModifier:
-                message = "[TOOL][SAMPREDICTOR] SAM activated..."
-                # Segment with SAM
-                self.segmentWithSAMPredictor()
-                self.pick_points.reset()
-                self.labels = []
+        # There are existing points, and there is a Click + Shift
+        elif len(points) and mods == Qt.ShiftModifier:
+            message = "[TOOL][SAMPREDICTOR] SAM activated..."
+            # Segment with SAM
+            self.loadNetwork()
+            self.segmentWithSAMPredictor()
+            self.resetWorkArea()
+            self.pick_points.reset()
+            self.labels = []
 
     def getPadding(self):
         """
         Get the padding amount based on the location of point(s)
         """
+
+        # Mosaic dimensions
+        self.width = self.viewerplus.img_map.size().width()
+        self.height = self.viewerplus.img_map.size().height()
 
         # Point(s) passed from GUI
         points = np.asarray(self.pick_points.points).astype(int)
@@ -306,7 +297,6 @@ class SAMPredictor(Tool):
         self.log.emit("[TOOL][SAMPREDICTOR] Segmentation ends.")
 
         QApplication.restoreOverrideCursor()
-        self.resetWorkArea()
 
     def createBlob(self, mask_src, mask_dst, bbox_src, left_map_pos, top_map_pos):
         """

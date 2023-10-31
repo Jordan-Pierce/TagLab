@@ -661,7 +661,7 @@ class QtImageViewerPlus(QtImageViewer):
                 lbl = Label("", "", fill=[0, 0, 0])
                 self.tools.tools["WATERSHED"].setActiveLabel(lbl)
 
-        if tool in ["DEEPEXTREME"]:
+        if tool in ["DEEPEXTREME", "SAMGENERATOR"]:
             self.showCrossair = True
         else:
             self.showCrossair = False
@@ -676,7 +676,7 @@ class QtImageViewerPlus(QtImageViewer):
 
         self.tools.resetTools()
 
-        if self.tools.tool in ["DEEPEXTREME", "SAMPREDICTOR"]:
+        if self.tools.tool in ["DEEPEXTREME", "SAMGENERATOR"]:
             self.showCrossair = True
         else:
             self.showCrossair = False
