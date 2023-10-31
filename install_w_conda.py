@@ -38,12 +38,13 @@ cuda_path = r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA"
 if len(sys.argv) == 2 and sys.argv[1] == 'cpu':
     flag_install_pythorch_cpu = True
 
-# get nvcc version
+# Get nvcc version
 if osused == 'Darwin':
     # For Mac, use CPU
     flag_install_pythorch_cpu = True
     print('NVCC not supported on MacOS. Installing cpu version automatically...')
 
+# If user wants GPU pytorch
 elif not flag_install_pythorch_cpu:
 
     # Check that cuda is in program files

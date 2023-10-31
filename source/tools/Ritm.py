@@ -95,7 +95,6 @@ class Ritm(Tool):
         self.work_area_bbox = [round(rect_map.top()), round(rect_map.left()),
                                round(rect_map.width()), round(rect_map.height())]
 
-
         image_crop = cropQImage(self.viewerplus.img_map, self.work_area_bbox)
         input_image = qimageToNumpyArray(image_crop)
 
