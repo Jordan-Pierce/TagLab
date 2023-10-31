@@ -643,7 +643,7 @@ class QtImageViewerPlus(QtImageViewer):
                 (tool in ["CUT", "EDITBORDER", "RITM"] and len(self.selected_blobs) > 1):
             self.resetSelection()
 
-        if tool == "RITM":
+        if tool in ["RITM", "SAMPREDICTOR"]:
             self.setContextMenuPolicy(Qt.NoContextMenu)
         else:
             self.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -661,7 +661,7 @@ class QtImageViewerPlus(QtImageViewer):
                 lbl = Label("", "", fill=[0, 0, 0])
                 self.tools.tools["WATERSHED"].setActiveLabel(lbl)
 
-        if tool in ["DEEPEXTREME", "SAMPREDICTOR"]:
+        if tool in ["DEEPEXTREME"]:
             self.showCrossair = True
         else:
             self.showCrossair = False
@@ -742,7 +742,7 @@ class QtImageViewerPlus(QtImageViewer):
             (x, y) = self.clipScenePos(scenePos)
             self.leftMouseButtonPressed.emit(x, y)
 
-            # Add points with left-click; shift + left-click activates SAM
+            # Add positive points with left-click; shift + left-click activates SAM
             if self.tools.tool == 'SAMPREDICTOR':
                 self.tools.leftPressed(x, y, mods)
 
@@ -769,8 +769,14 @@ class QtImageViewerPlus(QtImageViewer):
 
         if event.button() == Qt.RightButton:
             (x, y) = self.clipScenePos(scenePos)
+
             if self.tools.tool == "RITM":
                 self.tools.rightPressed(x, y, mods)
+
+            # Add negative points with right-click; shift + left-click activates SAM
+            elif self.tools.tool == 'SAMPREDICTOR':
+                self.tools.rightPressed(x, y, mods)
+
             else:
                 self.rightMouseButtonPressed.emit(x, y)
 

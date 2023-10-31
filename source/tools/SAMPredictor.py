@@ -9,6 +9,7 @@ from source import utils
 import os
 import cv2
 import numpy as np
+from scipy import ndimage as ndi
 from skimage.measure import regionprops
 
 import torch
@@ -32,6 +33,8 @@ class SAMPredictor(Tool):
         self.sam_model_type = 'vit_l'
         # Mask score threshold
         self.score_threshold = 0.80
+        # Labels for fore/background
+        self.labels = []
         # For debugging
         self.debug = False
 
@@ -45,11 +48,12 @@ class SAMPredictor(Tool):
 
         # Drawing on GUI
         self.CROSS_LINE_WIDTH = 2
-        self.pick_style = {'width': self.CROSS_LINE_WIDTH, 'color': Qt.red, 'size': 6}
+        self.pos_pick_style = {'width': self.CROSS_LINE_WIDTH, 'color': Qt.green, 'size': 6}
+        self.neg_pick_style = {'width': self.CROSS_LINE_WIDTH, 'color': Qt.red, 'size': 6}
         self.work_area_bbox = None
         self.work_area_item = None
 
-    def leftPressed(self, x, y, mods):
+    def initalize(self):
 
         # Mosaic dimensions
         self.width = self.viewerplus.img_map.size().width()
@@ -58,16 +62,42 @@ class SAMPredictor(Tool):
         # Load Network in the beginning
         self.loadNetwork()
 
+    def rightPressed(self, x, y, mods):
+        """
+        Negative points
+        """
+
+        self.initalize()
+
+        # If the weights are there, continue
+        if self.sampredictor_net:
+
+            self.pick_points.addPoint(x, y, self.neg_pick_style)
+            self.labels.append(0)
+            message = "[TOOL][SAMPREDICTOR] New point picked"
+            self.log.emit(message)
+            # Update working area
+            self.getPadding()
+            self.getWorkArea()
+
+    def leftPressed(self, x, y, mods):
+        """
+        Positive points
+        """
+
+        self.initalize()
+
         # If the weights are there, continue
         if self.sampredictor_net:
 
             points = self.pick_points.points
 
-            # Single Click
-            # There are no existing points, but this point and shift are clicked
+            # Single-Click Segmentation
+            # There are no existing points, but there is a Click + Shift
             if not points and mods == Qt.ShiftModifier:
-                self.pick_points.addPoint(x, y, self.pick_style)
-                message = "[TOOL][SAMPREDICTOR] New point picked (" + str(len(points)) + ")"
+                self.pick_points.addPoint(x, y, self.pos_pick_style)
+                self.labels.append(1)
+                message = "[TOOL][SAMPREDICTOR] New point picked"
                 self.log.emit(message)
                 # Update working area
                 self.getPadding()
@@ -75,29 +105,25 @@ class SAMPredictor(Tool):
                 # Segment with SAM
                 self.segmentWithSAMPredictor()
                 self.pick_points.reset()
+                self.labels = []
 
-            # Multi Click
-            # Point is clicked without shift
-            if mods != Qt.ShiftModifier:
-                self.pick_points.addPoint(x, y, self.pick_style)
-                message = "[TOOL][SAMPREDICTOR] New point picked (" + str(len(points)) + ")"
+            # There is a Click without Shift
+            elif mods != Qt.ShiftModifier:
+                self.pick_points.addPoint(x, y, self.pos_pick_style)
+                self.labels.append(1)
+                message = "[TOOL][SAMPREDICTOR] New point picked"
                 self.log.emit(message)
                 # Update working area
                 self.getPadding()
                 self.getWorkArea()
 
-            # Last Click
-            # There are existing points, and the latest point was clicked with shift
-            if len(points) and mods == Qt.ShiftModifier:
-                self.pick_points.addPoint(x, y, self.pick_style)
-                message = "[TOOL][SAMPREDICTOR] New point picked (" + str(len(points)) + ")"
-                self.log.emit(message)
-                # Update working area
-                self.getPadding()
-                self.getWorkArea()
+            # There are existing points, and there is a Click + Shift
+            elif len(points) and mods == Qt.ShiftModifier:
+                message = "[TOOL][SAMPREDICTOR] SAM activated..."
                 # Segment with SAM
                 self.segmentWithSAMPredictor()
                 self.pick_points.reset()
+                self.labels = []
 
     def getPadding(self):
         """
@@ -229,7 +255,7 @@ class SAMPredictor(Tool):
 
         # Transform the points, create labels
         input_points = points_resized.astype(int)
-        input_labels = np.array([1] * len(points_resized))
+        input_labels = np.array(self.labels)
 
         # Make prediction given points
         mask, score, logit = self.sampredictor_net.predict(point_coords=input_points,
@@ -241,7 +267,9 @@ class SAMPredictor(Tool):
             self.infoMessage.emit("Predicted mask score is too low, skipping...")
         else:
             # Get the mask as a float
-            mask_resized = mask.squeeze().astype(float)
+            mask_resized = mask.squeeze()
+            # Fill in while still small
+            mask_resized = ndi.binary_fill_holes(mask_resized).astype(float)
 
             # Get the cropped mask, given the bbox and original image
             mask_cropped = helpers.crop2fullmask(mask_resized,
@@ -416,4 +444,5 @@ class SAMPredictor(Tool):
         """
         self.resetNetwork()
         self.pick_points.reset()
+        self.labels = []
         self.resetWorkArea()

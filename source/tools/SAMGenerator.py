@@ -47,13 +47,21 @@ class SAMGenerator(Tool):
         self.work_area_bbox = None
         self.work_area_item = None
 
+    def initalize(self):
+
+        # Mosaic dimensions
+        self.width = self.viewerplus.img_map.size().width()
+        self.height = self.viewerplus.img_map.size().height()
+
+        # Load Network in the beginning
+        self.loadNetwork()
+
     def leftPressed(self, x, y, mods):
         """
 
         """
 
-        # Load Network in the beginning
-        self.loadNetwork()
+        self.initalize()
 
         # If the weights are there, continue
         if self.samgenerator_net:
