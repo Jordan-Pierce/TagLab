@@ -389,7 +389,7 @@ command = [sys.executable, "-m", "pip", "install", "numpy"]
 subprocess.run(command, check=True)
 
 # Install SAM
-command = [sys.executable, "-m", "pip", "install", "git+https://github.com/facebookresearch/segment-anything.git"]
+command = [sys.executable, "-m", "pip", "install", "segment-anything"]
 subprocess.run(command, check=True)
 
 # check for other networks

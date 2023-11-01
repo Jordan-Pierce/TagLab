@@ -325,7 +325,7 @@ else:
         os.remove(this_directory + '/' + filename_gdal)
 
 # Install SAM
-command = [sys.executable, "-m", "pip", "install", "git+https://github.com/facebookresearch/segment-anything.git"]
+command = [sys.executable, "-m", "pip", "install", "segment-anything"]
 subprocess.run(command, check=True)
 
 # check for other networks
