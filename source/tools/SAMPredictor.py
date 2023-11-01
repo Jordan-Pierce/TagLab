@@ -27,13 +27,13 @@ class SAMPredictor(Tool):
         self.pick_points = pick_points
 
         # Image is resized to
-        self.resize_to = 1024
+        self.resize_to = 2048
         # Padding amount
         self.pad = 0
         # Model Type (b, l, or h)
         self.sam_model_type = 'vit_l'
         # Mask score threshold
-        self.score_threshold = 0.80
+        self.score_threshold = 0.75
         # Labels for fore/background
         self.labels = []
         # For debugging
@@ -305,7 +305,6 @@ class SAMPredictor(Tool):
 
         # Bbox of the area of interest before scaled
         x1_src, y1_src, w_src, h_src = bbox_src
-        x2_src, y2_src = x1_src + w_src, y1_src + h_src
 
         # Calculate scale
         x_scale = mask_dst.shape[1] / mask_src.shape[1]

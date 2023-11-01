@@ -32,7 +32,7 @@ class SAMGenerator(Tool):
         self.resize_to = 1024
         # Padding amount
         # Model Type (b, l, or h)
-        self.sam_model_type = 'vit_l'
+        self.sam_model_type = 'vit_b'
         # Mask score threshold
         self.score_threshold = 0.80
         # For debugging
@@ -304,7 +304,7 @@ class SAMGenerator(Tool):
                 sam_model = sam_model_registry[self.sam_model_type](checkpoint=path)
                 sam_model.to(device=device)
                 self.samgenerator_net = SamAutomaticMaskGenerator(sam_model,
-                                                                  points_per_side=16,
+                                                                  points_per_side=32,
                                                                   points_per_batch=128)
                 self.device = device
 
