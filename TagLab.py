@@ -236,8 +236,8 @@ class TagLab(QMainWindow):
         self.btnDeepExtreme = self.newButton("dexter.png", "4-clicks segmentation", flatbuttonstyle2, self.deepExtreme)
         self.btnRitm = self.newButton("ritm.png", "Positive/negative clicks segmentation", flatbuttonstyle2, self.ritm)
         self.btnAutoClassification = self.newButton("auto.png", "Fully auto semantic segmentation", flatbuttonstyle2, self.selectClassifier)
-        self.btnSAMPredictor = self.newButton("sampred.png", "SAM Predictor", flatbuttonstyle2, self.samPredictor)
-        self.btnSAMGenerator = self.newButton("samgen.png", "SAM Generator", flatbuttonstyle2, self.samGenerator)
+        self.btnSAMPredictor = self.newButton("sam_pred.png", "SAM Predictor", flatbuttonstyle2, self.samPredictor)
+        self.btnSAMGenerator = self.newButton("sam_gen.png", "SAM Generator", flatbuttonstyle2, self.samGenerator)
 
         # Split Screen operation removed from the toolbar
         self.pxmapSeparator = QPixmap(os.path.join(os.path.join(self.taglab_dir, "icons"), "separator.png"))
@@ -2491,16 +2491,19 @@ class TagLab(QMainWindow):
     @pyqtSlot()
     def samPredictor(self):
         """
-        Activate the "SAM Predictor" tool. The segmentation is performed by selecting one point at the center
-        of a coral (left-click + Shift), or selecting multiple points around the extremes (left-click) with the
-        last point selected (left-click) while pressing the Shift key (i.e., left-click + Shift activates SAM).
+        Activate the "SAM Predictor" tool. The segmentation is performed by selecting 1 or more positive points
+        (left-clicks) around the coral, then pressing SHIFT + Left-Click; additionally, you can provide negative
+        points (right-clicks) to represent areas to avoid; finally, single segmentations can be performed by
+        doing a single SHIFT + Left-Click in the center of smaller corals.
         """
         self.setTool("SAMPREDICTOR")
 
     @pyqtSlot()
     def samGenerator(self):
         """
-        Activate the "SAM Generator" tool.
+        Activate the "SAM Generator" tool. The segmentation is performed by first selecting 2 points to
+        represent the top-left and bottom-right of the work area, followed by a SHIFT + Left-Click.
+        Clicking a third time will reset the defined work area, setting a new top-left coordinate.
         """
         self.setTool("SAMGENERATOR")
 
