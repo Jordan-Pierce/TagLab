@@ -324,19 +324,30 @@ else:
         # delete wheel files
         os.remove(this_directory + '/' + filename_gdal)
 
+# Install SAM
+command = [sys.executable, "-m", "pip", "install", "git+https://github.com/facebookresearch/segment-anything.git"]
+subprocess.run(command, check=True)
+
 # check for other networks
 print('Downloading networks...')
-base_url = 'http://taglab.isti.cnr.it/models/'
 from os import path
 import urllib.request
+
 this_directory = path.abspath(path.dirname(__file__))
-net_file_names = ['dextr_corals.pth', 'deeplab-resnet.pth.tar', 'ritm_corals.pth',
-                  'pocillopora.net', 'porites.net', 'pocillopora_porite_montipora.net']
+
+# TagLab Weights
+base_url = 'http://taglab.isti.cnr.it/models/'
+net_file_names = ['dextr_corals.pth',
+                  'deeplab-resnet.pth.tar',
+                  'ritm_corals.pth',
+                  'pocillopora.net',
+                  'porites.net',
+                  'pocillopora_porite_montipora.net']
 
 for net_name in net_file_names:
     filename_dextr_corals = 'dextr_corals.pth'
     net_file = Path('models/' + net_name)
-    if not net_file.is_file(): #if file not exists
+    if not net_file.is_file():  # if file not exists
         try:
             url_dextr = base_url + net_name
             print('Downloading ' + url_dextr + '...')
@@ -346,5 +357,31 @@ for net_name in net_file_names:
             urllib.request.urlretrieve(url_dextr, 'models/' + net_name)
         except:
             raise Exception("Cannot download " + net_name + ".")
+    else:
+        print(net_name + ' already exists.')
+
+
+# SAM Weights
+base_url = "https://dl.fbaipublicfiles.com/segment_anything/"
+net_file_names = ["sam_vit_b_01ec64.pth",
+                  "sam_vit_l_0b3195.pth",
+                  "sam_vit_h_4b8939.pth"]
+
+for net_name in net_file_names:
+    path_dextr = f"models/{net_name}"
+    if not os.path.exists(path_dextr):
+        try:
+            url_dextr = base_url + net_name
+            print('Downloading ' + url_dextr + '...')
+            # Send an HTTP GET request to the URL
+            opener = urllib.request.build_opener()
+            opener.addheaders = [('User-agent', 'Mozilla/5.0')]
+            urllib.request.install_opener(opener)
+            urllib.request.urlretrieve(url_dextr, path_dextr)
+            print(f"NOTE: Downloaded file successfully")
+            print(f"NOTE: Saved file to {path_dextr}")
+        except:
+            raise Exception("Cannot download " + net_name + ".")
+
     else:
         print(net_name + ' already exists.')
