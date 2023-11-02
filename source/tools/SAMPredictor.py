@@ -298,13 +298,14 @@ class SAMPredictor(Tool):
 
         QApplication.restoreOverrideCursor()
 
-    def createBlob(self, mask_src, mask_dst, bbox_src, left_map_pos, top_map_pos):
+    def createBlob(self, mask_src, mask_dst, bbox_src, left_map_pos, top_map_pos, omit_border_masks=True):
         """
         Create a blob manually given the generated mask
         """
 
         # Bbox of the area of interest before scaled
         x1_src, y1_src, w_src, h_src = bbox_src
+        x2_src, y2_src = x1_src + w_src, y1_src + h_src
 
         # Calculate scale
         x_scale = mask_dst.shape[1] / mask_src.shape[1]
@@ -316,8 +317,46 @@ class SAMPredictor(Tool):
         w_dst = w_src * x_scale
         h_dst = h_src * y_scale
 
+        x2_dst = x1_dst + w_dst
+        y2_dst = y1_dst + h_dst
+
         # Bbox of the area of interest after scaled
         bbox_dst = (x1_dst, y1_dst, (x1_dst + w_dst), (y1_dst + h_dst))
+
+        if omit_border_masks:
+
+            # ********************************************************
+            # Remove masks that form at the boundaries?
+            # May remove this if users prefer to keep those and clean
+            # them manually afterwards, but it appears to be more work
+            # ********************************************************
+            eps = 3
+
+            # Is the mask along the:
+            min_mosaic = True
+            max_mosaic = True
+            min_image = True
+            max_image = True
+
+            # If below the minimum boundaries of mosaic, that's not okay
+            if np.all(np.array([x1_dst, y1_dst, x2_dst, y2_dst]) >= 0):
+                min_mosaic = False
+
+            # If along the maximum boundaries of mosaic, that's okay
+            if x2_dst <= self.width or y2_dst <= self.height:
+                max_mosaic = False
+
+            # If along any of the minimum boundaries of resized image, that's not okay
+            if np.all(np.array([x1_src, y1_src]) >= 0 + eps):
+                min_image = False
+
+            # If along any of the minimum boundaries of resized image, that's not okay
+            if x2_src <= mask_src.shape[1] - eps and y2_src <= mask_src.shape[0] - eps:
+                max_image = False
+
+            # If any of the above conditions are true, don't keep mask
+            if np.any(np.array([min_mosaic, max_mosaic, min_image, max_image])):
+                return None
 
         try:
             # Create region manually since information is available;

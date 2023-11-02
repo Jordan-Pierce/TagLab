@@ -29,7 +29,7 @@ class SAMGenerator(Tool):
         self.pick_points = pick_points
 
         # Image is resized to
-        self.resize_to = 1024
+        self.resize_to = 2048
         # Padding amount
         # Model Type (b, l, or h)
         self.sam_model_type = 'vit_b'
@@ -119,11 +119,11 @@ class SAMGenerator(Tool):
             self.work_area_item = self.viewerplus.scene.addRect(x, y, w, h, pen, brush)
             self.work_area_item.setZValue(3)
 
-    def resizeArray(self, arr, shape):
+    def resizeArray(self, arr, shape, interpolation=cv2.INTER_CUBIC):
         """
         Resize array; expects 2D array.
         """
-        return cv2.resize(arr.astype(float), shape, cv2.INTER_NEAREST).astype(int)
+        return cv2.resize(arr.astype(float), shape, interpolation)
 
     def prepareForSAMGenerator(self):
         """
@@ -176,7 +176,8 @@ class SAMGenerator(Tool):
 
             # Resize mask back to cropped size
             target_shape = (image_cropped.shape[:2][::-1])
-            mask_cropped = self.resizeArray(mask_resized, target_shape)
+            mask_cropped = self.resizeArray(mask_resized, target_shape, cv2.INTER_CUBIC)
+            mask_cropped = mask_cropped.astype(np.uint8)
 
             # Create a blob manually using provided information
             blob = self.createBlob(mask_resized, mask_cropped, bbox, left_map_pos, top_map_pos)
@@ -191,7 +192,7 @@ class SAMGenerator(Tool):
         self.log.emit("[TOOL][SAMGENERATOR] Segmentation ends.")
         self.resetWorkArea()
 
-    def createBlob(self, mask_src, mask_dst, bbox_src, left_map_pos, top_map_pos):
+    def createBlob(self, mask_src, mask_dst, bbox_src, left_map_pos, top_map_pos, omit_border_masks=True):
         """
         Create a blob manually given the generated mask
         """
@@ -216,42 +217,40 @@ class SAMGenerator(Tool):
         # Bbox of the area of interest after scaled
         bbox_dst = (x1_dst, y1_dst, (x1_dst + w_dst), (y1_dst + h_dst))
 
-        # ********************************************************
-        # Remove masks that form at the boundaries?
-        # May remove this if users prefer to keep those and clean
-        # them manually afterwards, but it appears to be more work
-        # ********************************************************
-        eps = 3
+        if omit_border_masks:
 
-        # Is the mask along the:
-        along_min_mosaic = True
-        along_max_mosaic = True
-        along_min_image = True
-        along_max_image = True
+            # ********************************************************
+            # Remove masks that form at the boundaries?
+            # May remove this if users prefer to keep those and clean
+            # them manually afterwards, but it appears to be more work
+            # ********************************************************
+            eps = 3
 
-        # If below the minimum boundaries of mosaic, that's not okay
-        if np.all(np.array([x1_dst, y1_dst, x2_dst, y2_dst]) >= 0):
-            along_min_mosaic = False
+            # Is the mask along the:
+            min_mosaic = True
+            max_mosaic = True
+            min_image = True
+            max_image = True
 
-        # If along the maximum boundaries of mosaic, that's okay
-        if x2_dst <= self.width or y2_dst <= self.height:
-            along_max_mosaic = False
+            # If below the minimum boundaries of mosaic, that's not okay
+            if np.all(np.array([x1_dst, y1_dst, x2_dst, y2_dst]) >= 0):
+                min_mosaic = False
 
-        # If any of the above conditions are true, don't keep mask
-        if along_min_mosaic or along_max_mosaic:
-            return None
+            # If along the maximum boundaries of mosaic, that's okay
+            if x2_dst <= self.width or y2_dst <= self.height:
+                max_mosaic = False
 
-        # If along any of the minimum boundaries of resized image, that's not okay
-        if np.all(np.array([x1_src, y1_src]) >= 0 + eps):
-            along_min_image = False
+            # If along any of the minimum boundaries of resized image, that's not okay
+            if np.all(np.array([x1_src, y1_src]) >= 0 + eps):
+                min_image = False
 
-        # If along any of the minimum boundaries of resized image, that's not okay
-        if x2_src <= mask_src.shape[1] - eps and y2_src <= mask_src.shape[0] - eps:
-            along_max_image = False
+            # If along any of the minimum boundaries of resized image, that's not okay
+            if x2_src <= mask_src.shape[1] - eps and y2_src <= mask_src.shape[0] - eps:
+                max_image = False
 
-        # If any of the above conditions are true, don't keep mask
-        if along_min_image or along_max_image:
-            return None
+            # If any of the above conditions are true, don't keep mask
+            if np.any(np.array([min_mosaic, max_mosaic, min_image, max_image])):
+                return None
 
         try:
             # Create region manually since information is available;
@@ -304,7 +303,7 @@ class SAMGenerator(Tool):
                 sam_model = sam_model_registry[self.sam_model_type](checkpoint=path)
                 sam_model.to(device=device)
                 self.samgenerator_net = SamAutomaticMaskGenerator(sam_model,
-                                                                  points_per_side=32,
+                                                                  points_per_side=16,
                                                                   points_per_batch=128)
                 self.device = device
 
