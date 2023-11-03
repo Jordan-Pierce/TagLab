@@ -667,7 +667,7 @@ class QtImageViewerPlus(QtImageViewer):
             self.showCrossair = False
 
         # WHEN panning is active or not
-        if tool in ["MOVE", "MATCH", "DEEPEXTREME", "RITM", "SAMPREDICTOR"]:
+        if tool in ["MOVE", "MATCH", "DEEPEXTREME", "RITM", "SAMPREDICTOR", "SAMGENERATOR"]:
             self.enablePan()
         else:
             self.disablePan()  # in this case, it is possible to PAN only moving the mouse and pressing the CTRL key
@@ -742,18 +742,10 @@ class QtImageViewerPlus(QtImageViewer):
             (x, y) = self.clipScenePos(scenePos)
             self.leftMouseButtonPressed.emit(x, y)
 
-            # Add positive points with left-click; shift + left-click activates SAM
-            if self.tools.tool == 'SAMPREDICTOR':
-                self.tools.leftPressed(x, y, mods)
-
-            elif self.tools.tool == 'SAMGENERATOR':
-                self.tools.leftPressed(x, y, mods)
-
-            # used from area selection and pen drawing,
-            elif (self.panEnabled and not (mods & Qt.ShiftModifier)) or (mods & Qt.ControlModifier):
+            if (self.panEnabled and not (mods & Qt.ShiftModifier)) or (mods & Qt.ControlModifier):
                 self.setDragMode(QGraphicsView.ScrollHandDrag)
 
-            elif self.tools.tool in ["MATCH", "RITM", "DEEPEXTREME"]:
+            elif self.tools.tool in ["MATCH", "RITM", "DEEPEXTREME", "SAMGENERATOR", "SAMPREDICTOR"]:
                 self.tools.leftPressed(x, y, mods)
 
             elif mods & Qt.ShiftModifier:
@@ -850,7 +842,7 @@ class QtImageViewerPlus(QtImageViewer):
         super().keyPressEvent(event)
 
     def keyReleaseEvent(self, event):
-        if event.key() == Qt.Key_Shift and self.tools.tool == "RITM":
+        if event.key() == Qt.Key_Shift and self.tools.tool in ["RITM", "SAMPREDICTOR", "SAMGENERATOR"]:
             QApplication.setOverrideCursor(Qt.ArrowCursor)
         super().keyPressEvent(event)
 

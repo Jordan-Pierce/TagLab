@@ -60,7 +60,7 @@ class SAMGenerator(Tool):
         points = np.asarray(self.pick_points.points).astype(int)
 
         # Left-Click san Shift, re-define work area
-        if mods != Qt.ShiftModifier:
+        if mods == Qt.ShiftModifier:
 
             # User changes mind about work area
             if len(points) == 2:
@@ -71,19 +71,6 @@ class SAMGenerator(Tool):
             # Update working area
             self.updateWorkArea()
 
-        # Left-Click + Shift, activate SAM
-        if mods == Qt.ShiftModifier and len(points) == 2:
-
-            # Only performed once
-            self.loadNetwork()
-
-            message = "[TOOL][SAMGENERATOR] Segmentation activated..."
-            self.log.emit(message)
-            # Segment with SAM
-            self.segmentWithSAMGenerator()
-            # Reset working area, points
-            self.resetWorkArea()
-            self.pick_points.reset()
 
     def updateWorkArea(self):
         """
@@ -118,6 +105,17 @@ class SAMGenerator(Tool):
             h = self.work_area_bbox[3]
             self.work_area_item = self.viewerplus.scene.addRect(x, y, w, h, pen, brush)
             self.work_area_item.setZValue(3)
+
+    def apply(self):
+        """
+
+        """
+        if len(self.pick_points.points) == 2:
+            self.loadNetwork()
+            self.segmentWithSAMGenerator()
+            self.resetWorkArea()
+            self.pick_points.reset()
+            self.labels = []
 
     def resizeArray(self, arr, shape, interpolation=cv2.INTER_CUBIC):
         """
