@@ -9,6 +9,7 @@ from source import utils
 import os
 import cv2
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy import ndimage as ndi
 from skimage.measure import regionprops
 
@@ -265,6 +266,20 @@ class SAMPredictor(Tool):
             target_shape = (image_cropped.shape[:2][::-1])
             mask_cropped = self.resizeArray(mask_cropped, target_shape)
 
+            if self.debug:
+                os.makedirs("debug", exist_ok=True)
+                plt.figure(figsize=(10, 10))
+                plt.subplot(2, 1, 1)
+                plt.imshow(image_cropped)
+                plt.imshow(mask_cropped, alpha=0.5)
+                plt.scatter(points_ori.T[0], points_ori.T[1], c='red', s=100)
+                plt.subplot(2, 1, 2)
+                plt.imshow(image_resized)
+                plt.imshow(mask_resized, alpha=0.5)
+                plt.scatter(points_resized.T[0], points_resized.T[1], c='red', s=100)
+                plt.savefig(r"debug\SegmentationOutput.png")
+                plt.close()
+
             # Create a blob manually using provided information
             blob = self.createBlob(mask_resized, mask_cropped, bbox, left_map_pos, top_map_pos)
 
@@ -287,7 +302,6 @@ class SAMPredictor(Tool):
 
         # Bbox of the area of interest before scaled
         x1_src, y1_src, w_src, h_src = bbox_src
-        x2_src, y2_src = x1_src + w_src, y1_src + h_src
 
         # Calculate scale
         x_scale = mask_dst.shape[1] / mask_src.shape[1]
@@ -299,46 +313,8 @@ class SAMPredictor(Tool):
         w_dst = w_src * x_scale
         h_dst = h_src * y_scale
 
-        x2_dst = x1_dst + w_dst
-        y2_dst = y1_dst + h_dst
-
         # Bbox of the area of interest after scaled
         bbox_dst = (x1_dst, y1_dst, (x1_dst + w_dst), (y1_dst + h_dst))
-
-        if omit_border_masks:
-
-            # ********************************************************
-            # Remove masks that form at the boundaries?
-            # May remove this if users prefer to keep those and clean
-            # them manually afterwards, but it appears to be more work
-            # ********************************************************
-            eps = 3
-
-            # Is the mask along the:
-            min_mosaic = True
-            max_mosaic = True
-            min_image = True
-            max_image = True
-
-            # If below the minimum boundaries of mosaic, that's not okay
-            if np.all(np.array([x1_dst, y1_dst, x2_dst, y2_dst]) >= 0):
-                min_mosaic = False
-
-            # If along the maximum boundaries of mosaic, that's okay
-            if x2_dst <= self.width or y2_dst <= self.height:
-                max_mosaic = False
-
-            # If along any of the minimum boundaries of resized image, that's not okay
-            if np.all(np.array([x1_src, y1_src]) >= 0 + eps):
-                min_image = False
-
-            # If along any of the minimum boundaries of resized image, that's not okay
-            if x2_src <= mask_src.shape[1] - eps and y2_src <= mask_src.shape[0] - eps:
-                max_image = False
-
-            # If any of the above conditions are true, don't keep mask
-            if np.any(np.array([min_mosaic, max_mosaic, min_image, max_image])):
-                return None
 
         try:
             # Create region manually since information is available;
