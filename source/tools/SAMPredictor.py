@@ -1,6 +1,7 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication, QMessageBox
 from PyQt5.QtGui import QImage, QPen, QBrush
+from source.utils import qimageToNumpyArray, cropQImage
 
 from source.Blob import Blob
 from source.tools.Tool import Tool
@@ -32,9 +33,9 @@ class SAMPredictor(Tool):
         # Padding amount
         self.pad = 0
         # Model Type (b, l, or h)
-        self.sam_model_type = 'vit_l'
+        self.sam_model_type = 'vit_b'
         # Mask score threshold
-        self.score_threshold = 0.75
+        self.score_threshold = 0.70
         # Labels for fore/background
         self.labels = []
         # For debugging
@@ -44,99 +45,134 @@ class SAMPredictor(Tool):
         self.width = None
         self.height = None
 
+        # Set image
+        self.image_resized = None
+        self.image_cropped = None
+
         # SAM, CUDA or CPU
         self.sampredictor_net = None
         self.device = None
 
         # Drawing on GUI
         self.CROSS_LINE_WIDTH = 2
+        self.work_pick_style = {'width': self.CROSS_LINE_WIDTH, 'color': Qt.cyan, 'size': 8}
         self.pos_pick_style = {'width': self.CROSS_LINE_WIDTH, 'color': Qt.green, 'size': 6}
         self.neg_pick_style = {'width': self.CROSS_LINE_WIDTH, 'color': Qt.red, 'size': 6}
+        self.work_area_points = []
         self.work_area_bbox = None
         self.work_area_item = None
+
+    def leftPressed(self, x, y, mods):
+        """
+        Positive points
+        """
+        self.loadNetwork()
+
+        # User is still selecting work area
+        if not self.sampredictor_net.is_image_set:
+
+            # Collect points to set work area
+            if len(self.pick_points.points) < 2:
+                self.pick_points.addPoint(x, y, self.work_pick_style)
+
+            # User choose a third point without pressing
+            # SPACE, so reset the work area points, add
+            else:
+                self.pick_points.reset()
+                self.pick_points.addPoint(x, y, self.work_pick_style)
+
+        # User has already selected to work area, and now
+        # is choosing positive or negative points
+        else:
+
+            # Add points
+            self.pick_points.addPoint(x, y, self.pos_pick_style)
+            self.labels.append(1)
+            message = "[TOOL][SAMPREDICTOR] New point picked"
+            self.log.emit(message)
 
     def rightPressed(self, x, y, mods):
         """
         Negative points
         """
 
-        if mods == Qt.ShiftModifier:
-            self.pick_points.addPoint(x, y, self.neg_pick_style)
-            self.labels.append(0)
-            message = "[TOOL][SAMPREDICTOR] New point picked"
-            self.log.emit(message)
-            # Update working area
-            self.getPadding()
-            self.getWorkArea()
+        self.loadNetwork()
 
-    def leftPressed(self, x, y, mods):
-        """
-        Positive points
-        """
-
-        # There is a Click without Shift
         if mods == Qt.ShiftModifier:
-            self.pick_points.addPoint(x, y, self.pos_pick_style)
-            self.labels.append(1)
-            message = "[TOOL][SAMPREDICTOR] New point picked"
-            self.log.emit(message)
-            # Update working area
-            self.getPadding()
-            self.getWorkArea()
+
+            # User is still selecting work area
+            if not self.sampredictor_net.is_image_set:
+
+                # Collect points to set work area
+                if len(self.pick_points.points) < 2:
+                    self.pick_points.addPoint(x, y, self.work_pick_style)
+
+                # User choose a third point without pressing
+                # SPACE, so reset the work area points, add
+                else:
+                    self.pick_points.reset()
+                    self.pick_points.addPoint(x, y, self.work_pick_style)
+
+            # User has already selected to work area, and now
+            # is choosing positive or negative points
+            else:
+                # Add points
+                self.pick_points.addPoint(x, y, self.neg_pick_style)
+                self.labels.append(0)
+                message = "[TOOL][SAMPREDICTOR] New point picked"
+                self.log.emit(message)
 
     def apply(self):
         """
-
+        User presses SPACE to set work area, and again later to run the model
         """
-        if len(self.pick_points.points):
-            self.loadNetwork()
-            self.segmentWithSAMPredictor()
-            self.resetWorkArea()
+
+        if len(self.pick_points.points) and self.sampredictor_net.is_image_set:
+
+            if self.points_within_workarea():
+                self.segmentWithSAMPredictor()
+
             self.pick_points.reset()
             self.labels = []
 
-    def getPadding(self):
+        if len(self.pick_points.points) == 2 and not self.sampredictor_net.is_image_set:
+            self.setWorkArea()
+
+    def points_within_workarea(self):
         """
-        Get the padding amount based on the location of point(s)
+        Checks if selected points are within established work area
         """
 
-        # Mosaic dimensions
-        self.width = self.viewerplus.img_map.size().width()
-        self.height = self.viewerplus.img_map.size().height()
+        # Define the boundaries
+        left_map_pos = self.work_area_bbox[1]
+        top_map_pos = self.work_area_bbox[0]
+        width_map_pos = self.work_area_bbox[2]
+        height_map_pos = self.work_area_bbox[3]
 
-        # Point(s) passed from GUI
-        points = np.asarray(self.pick_points.points).astype(int)
+        # Check if any points are outside the boundaries
+        points = np.array(self.pick_points.points)
+        outside_boundaries = (
+                (points[:, 0] < left_map_pos) |
+                (points[:, 0] > left_map_pos + width_map_pos) |
+                (points[:, 1] < top_map_pos) |
+                (points[:, 1] > top_map_pos + height_map_pos)
+        )
 
-        # The amount to pad in all directions around the point(s)
-        # Useful as mosaics are of different sizes and fixed values
-        # would lead to bad results depending on the mosaic
-        if len(points) == 1 and np.max([self.width, self.height]) < 16000:
-            # If the mosaic is small, then we need to make the padding bigger
-            # when provided a single point as the ideal bbox size is unknown
-            pad = int(np.max([self.width, self.height]) * 0.1)
-        else:
-            # If there are multiple points, then the ideal bbox size is
-            # calculated based on the points, plus a small amount of padding
-            pad = int(np.max([self.width, self.height]) * 0.05)
+        return not np.any(outside_boundaries)
 
-        self.pad = pad
-
-    def getWorkArea(self):
+    def setWorkArea(self):
         """
-        Set the work area based on the location of point(s) and padding
+        Set the work area based on the location of points
         """
-        self.resetWorkArea()
 
-        points = np.asarray(self.pick_points.points).astype(int)
+        points = np.array(self.pick_points.points)
 
-        left = points[:, 0].min() - self.pad
-        right = points[:, 0].max() + self.pad
-        top = points[:, 1].min() - self.pad
-        bottom = points[:, 1].max() + self.pad
-        h = bottom - top
-        w = right - left
+        x = points[:, 0].min()
+        y = points[:, 1].min()
+        w = points[:, 0].max() - x
+        h = points[:, 1].max() - y
 
-        self.work_area_bbox = [round(top), round(left), round(w), round(h)]
+        self.work_area_bbox = [round(y), round(x), round(w), round(h)]
 
         # Display to GUI
         brush = QBrush(Qt.NoBrush)
@@ -151,11 +187,27 @@ class SAMPredictor(Tool):
         self.work_area_item = self.viewerplus.scene.addRect(x, y, w, h, pen, brush)
         self.work_area_item.setZValue(3)
 
-    def resizeArray(self, arr, shape):
+        # From the current view, crop the image
+        image_cropped = cropQImage(self.viewerplus.img_map, self.work_area_bbox)
+        image_cropped = qimageToNumpyArray(image_cropped)
+
+        # Resize the cropped image
+        image_resized = helpers.fixed_resize(image_cropped,
+                                             (self.resize_to, self.resize_to)).astype(np.uint8)
+
+        # Retain the images
+        self.image_cropped = image_cropped
+        self.image_resized = image_resized
+
+        # Set the image
+        self.sampredictor_net.set_image(image_resized)
+        self.pick_points.reset()
+
+    def resizeArray(self, arr, shape, interpolation=cv2.INTER_CUBIC):
         """
         Resize array; expects 2D array.
         """
-        return cv2.resize(arr.astype(float), shape, cv2.INTER_NEAREST).astype(int)
+        return cv2.resize(arr.astype(float), shape, interpolation)
 
     def prepareForSAMPredictor(self):
         """
@@ -163,34 +215,24 @@ class SAMPredictor(Tool):
         """
         points = np.asarray(self.pick_points.points).astype(int)
 
-        left = points[:, 0].min() - self.pad
-        right = points[:, 0].max() + self.pad
-        top = points[:, 1].min() - self.pad
-        bottom = points[:, 1].max() + self.pad
-        h = bottom - top
-        w = right - left
+        left = self.work_area_bbox[1]
+        top = self.work_area_bbox[0]
 
-        image_cropped = utils.cropQImage(self.viewerplus.img_map, [top, left, w, h])
+        # Update points to be in image_cropped coordinate space
+        points_cropped = np.zeros((len(points), 2), dtype=np.int32)
+        points_cropped[:, 0] = points[:, 0] - left
+        points_cropped[:, 1] = points[:, 1] - top
 
-        fmt = image_cropped.format()
-        assert (fmt == QImage.Format_RGB32)
+        # Points in the resized image
+        x_scale = self.image_resized.shape[1] / self.image_cropped.shape[1]
+        y_scale = self.image_resized.shape[0] / self.image_cropped.shape[0]
 
-        arr = np.zeros((h, w, 3), dtype=np.uint8)
+        # New coordinates
+        points_resized = np.zeros_like(points_cropped, dtype=np.float32)
+        points_resized[:, 0] = points_cropped[:, 0] * x_scale
+        points_resized[:, 1] = points_cropped[:, 1] * y_scale
 
-        bits = image_cropped.bits()
-        bits.setsize(int(h * w * 4))
-        arrtemp = np.frombuffer(bits, np.uint8).copy()
-        arrtemp = np.reshape(arrtemp, [h, w, 4])
-        arr[:, :, 0] = arrtemp[:, :, 2]
-        arr[:, :, 1] = arrtemp[:, :, 1]
-        arr[:, :, 2] = arrtemp[:, :, 0]
-
-        # update points to be in image_cropped coordinate space
-        updated_points = np.zeros((len(points), 2), dtype=np.int32)
-        updated_points[:, 0] = points[:, 0] - left
-        updated_points[:, 1] = points[:, 1] - top
-
-        return arr, updated_points
+        return points_cropped, points_resized
 
     def segmentWithSAMPredictor(self):
 
@@ -201,31 +243,16 @@ class SAMPredictor(Tool):
         self.infoMessage.emit("Segmentation is ongoing..")
         self.log.emit("[TOOL][SAMPREDICTOR] Segmentation begins..")
 
-        # User defined points in GUI
-        points = np.asarray(self.pick_points.points).astype(int)
+        # Mosaic dimensions
+        self.width = self.viewerplus.img_map.size().width()
+        self.height = self.viewerplus.img_map.size().height()
 
-        # Top-left corner of work area in GUI
-        left_map_pos = points[:, 0].min() - self.pad
-        top_map_pos = points[:, 1].min() - self.pad
+        # Get the work area top-left
+        left_map_pos = self.work_area_bbox[1]
+        top_map_pos = self.work_area_bbox[0]
 
-        # Image from work area, and points w/ transformed coordinates
-        (img, points_ori) = self.prepareForSAMPredictor()
-
-        # Points in img coordinate space
-        points_ori = points_ori.astype(int)
-        #  Padding of points by amount pad
-        bbox = helpers.get_bbox(img, points=points_ori, pad=self.pad, zero_pad=True)
-        # Cropping the image, and resizing it
-        image_cropped = helpers.crop_from_bbox(img, bbox, zero_pad=True)
-        image_resized = helpers.fixed_resize(image_cropped, (self.resize_to, self.resize_to)).astype(np.uint8)
-
-        # Generate points normalized to image values
-        points_resized = points_ori - [np.min(points_ori[:, 0]), np.min(points_ori[:, 1])] + [self.pad, self.pad]
-        # Remap the input points inside the resize_to x resize_to cropped box
-        points_resized = (self.resize_to * points_resized * [1 / image_cropped.shape[1], 1 / image_cropped.shape[0]])
-
-        # Set the resized image
-        self.sampredictor_net.set_image(image_resized)
+        # Points in the cropped image
+        points_cropped, points_resized = self.prepareForSAMPredictor()
 
         # Transform the points, create labels
         input_points = points_resized.astype(int)
@@ -245,15 +272,8 @@ class SAMPredictor(Tool):
             # Fill in while still small
             mask_resized = ndi.binary_fill_holes(mask_resized).astype(float)
 
-            # Get the cropped mask, given the bbox and original image
-            mask_cropped = helpers.crop2fullmask(mask_resized,
-                                                 bbox,
-                                                 im_size=img.shape[:2],
-                                                 zero_pad=True,
-                                                 relax=0).astype(np.uint8)
-
             # Region contain masked object
-            indices = np.argwhere(mask_cropped)
+            indices = np.argwhere(mask_resized)
 
             # Calculate the x, y, width, and height
             x = indices[:, 1].min()
@@ -263,18 +283,19 @@ class SAMPredictor(Tool):
             bbox = np.array([x, y, w, h])
 
             # Resize mask back to cropped size
-            target_shape = (image_cropped.shape[:2][::-1])
-            mask_cropped = self.resizeArray(mask_cropped, target_shape)
+            target_shape = (self.image_cropped.shape[:2][::-1])
+            mask_cropped = self.resizeArray(mask_resized, target_shape, cv2.INTER_CUBIC)
+            mask_cropped = mask_cropped.astype(np.uint8)
 
             if self.debug:
                 os.makedirs("debug", exist_ok=True)
                 plt.figure(figsize=(10, 10))
                 plt.subplot(2, 1, 1)
-                plt.imshow(image_cropped)
+                plt.imshow(self.image_cropped)
                 plt.imshow(mask_cropped, alpha=0.5)
-                plt.scatter(points_ori.T[0], points_ori.T[1], c='red', s=100)
+                plt.scatter(points_cropped.T[0], points_cropped.T[1], c='red', s=100)
                 plt.subplot(2, 1, 2)
-                plt.imshow(image_resized)
+                plt.imshow(self.image_resized)
                 plt.imshow(mask_resized, alpha=0.5)
                 plt.scatter(points_resized.T[0], points_resized.T[1], c='red', s=100)
                 plt.savefig(r"debug\SegmentationOutput.png")
@@ -295,7 +316,7 @@ class SAMPredictor(Tool):
 
         QApplication.restoreOverrideCursor()
 
-    def createBlob(self, mask_src, mask_dst, bbox_src, left_map_pos, top_map_pos, omit_border_masks=True):
+    def createBlob(self, mask_src, mask_dst, bbox_src, left_map_pos, top_map_pos):
         """
         Create a blob manually given the generated mask
         """
@@ -383,6 +404,9 @@ class SAMPredictor(Tool):
         """
         Reset working area
         """
+        self.image_resized = None
+        self.image_cropped = None
+        self.work_area_points = []
         self.work_area_bbox = [0, 0, 0, 0]
         if self.work_area_item is not None:
             self.viewerplus.scene.removeItem(self.work_area_item)
