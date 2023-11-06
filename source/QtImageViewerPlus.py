@@ -648,7 +648,7 @@ class QtImageViewerPlus(QtImageViewer):
         else:
             self.setContextMenuPolicy(Qt.CustomContextMenu)
 
-        if tool == "SELECTAREA" or tool == "RITM":
+        if tool in ["SELECTAREA", "RITM", "SAMPREDICTOR", "SAMGENERATOR"]:
             QApplication.setOverrideCursor(Qt.CrossCursor)
 
         if tool == "WATERSHED":
@@ -661,7 +661,7 @@ class QtImageViewerPlus(QtImageViewer):
                 lbl = Label("", "", fill=[0, 0, 0])
                 self.tools.tools["WATERSHED"].setActiveLabel(lbl)
 
-        if tool in ["DEEPEXTREME", "SAMGENERATOR"]:
+        if tool in ["DEEPEXTREME", "SAMGENERATOR", "SAMPREDICTOR"]:
             self.showCrossair = True
         else:
             self.showCrossair = False
@@ -676,7 +676,7 @@ class QtImageViewerPlus(QtImageViewer):
 
         self.tools.resetTools()
 
-        if self.tools.tool in ["DEEPEXTREME", "SAMGENERATOR"]:
+        if self.tools.tool in ["DEEPEXTREME", "SAMPREDICTOR", "SAMGENERATOR"]:
             self.showCrossair = True
         else:
             self.showCrossair = False

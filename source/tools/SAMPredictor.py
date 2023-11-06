@@ -1,11 +1,10 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication, QMessageBox
-from PyQt5.QtGui import QImage, QPen, QBrush
+from PyQt5.QtGui import QPen, QBrush
 from source.utils import qimageToNumpyArray, cropQImage
 
 from source.Blob import Blob
 from source.tools.Tool import Tool
-from source import utils
 
 import os
 import cv2
@@ -30,8 +29,6 @@ class SAMPredictor(Tool):
 
         # Image is resized to
         self.resize_to = 2048
-        # Padding amount
-        self.pad = 0
         # Model Type (b, l, or h)
         self.sam_model_type = 'vit_b'
         # Mask score threshold
@@ -54,13 +51,18 @@ class SAMPredictor(Tool):
         self.device = None
 
         # Drawing on GUI
+        self.work_area_points = []
+        self.work_area_bbox = None
+        self.work_area_item = None
+
+        # Updating masks/blobs
+        self.current_blobs = []
+        self.blob_to_correct = None
+
         self.CROSS_LINE_WIDTH = 2
         self.work_pick_style = {'width': self.CROSS_LINE_WIDTH, 'color': Qt.cyan, 'size': 8}
         self.pos_pick_style = {'width': self.CROSS_LINE_WIDTH, 'color': Qt.green, 'size': 6}
         self.neg_pick_style = {'width': self.CROSS_LINE_WIDTH, 'color': Qt.red, 'size': 6}
-        self.work_area_points = []
-        self.work_area_bbox = None
-        self.work_area_item = None
 
     def leftPressed(self, x, y, mods):
         """
@@ -81,7 +83,7 @@ class SAMPredictor(Tool):
                 self.pick_points.reset()
                 self.pick_points.addPoint(x, y, self.work_pick_style)
 
-        # User has already selected to work area, and now
+        # User has already selected a work area, and now
         # is choosing positive or negative points
         else:
 
@@ -90,6 +92,9 @@ class SAMPredictor(Tool):
             self.labels.append(1)
             message = "[TOOL][SAMPREDICTOR] New point picked"
             self.log.emit(message)
+            # Segment with current points
+            if self.points_within_workarea():
+                self.segmentWithSAMPredictor()
 
     def rightPressed(self, x, y, mods):
         """
@@ -113,7 +118,7 @@ class SAMPredictor(Tool):
                     self.pick_points.reset()
                     self.pick_points.addPoint(x, y, self.work_pick_style)
 
-            # User has already selected to work area, and now
+            # User has already selected a work area, and now
             # is choosing positive or negative points
             else:
                 # Add points
@@ -121,20 +126,41 @@ class SAMPredictor(Tool):
                 self.labels.append(0)
                 message = "[TOOL][SAMPREDICTOR] New point picked"
                 self.log.emit(message)
+                # Segment with current points
+                if self.points_within_workarea():
+                    self.segmentWithSAMPredictor()
 
     def apply(self):
         """
         User presses SPACE to set work area, and again later to run the model
         """
 
+        # User has finished clicking points, saving current blob
         if len(self.pick_points.points) and self.sampredictor_net.is_image_set:
 
-            if self.points_within_workarea():
-                self.segmentWithSAMPredictor()
+            # Finalize created blob
+            message = "[TOOL][SAMPREDICTOR][BLOB-CREATED]"
+            for blob in self.current_blobs:
 
+                if self.blob_to_correct is not None:
+                    self.viewerplus.removeBlob(self.blob_to_correct)
+                    blob.id = self.blob_to_correct.id
+                    blob.class_name = self.blob_to_correct.class_name
+                    message = "[TOOL][SAMPREDICTOR][BLOB-EDITED]"
+
+                # order is important: first add then setblob class!
+                self.undrawBlob(blob)
+                self.viewerplus.addBlob(blob, selected=True)
+                self.blobInfo.emit(blob, message)
+
+            self.viewerplus.saveUndo()
+            self.viewerplus.resetSelection()
             self.pick_points.reset()
             self.labels = []
+            self.current_blobs = []
+            self.blob_to_correct = None
 
+        # User has finished creating working area, saving work area
         if len(self.pick_points.points) == 2 and not self.sampredictor_net.is_image_set:
             self.setWorkArea()
 
@@ -301,15 +327,14 @@ class SAMPredictor(Tool):
                 plt.savefig(r"debug\SegmentationOutput.png")
                 plt.close()
 
+            self.undrawAllBlobs()
+
             # Create a blob manually using provided information
             blob = self.createBlob(mask_resized, mask_cropped, bbox, left_map_pos, top_map_pos)
 
-            self.viewerplus.resetSelection()
-
             if blob:
-                self.viewerplus.addBlob(blob, selected=True)
-                self.blobInfo.emit(blob, "[TOOL][SAMPREDICTOR][BLOB-CREATED]")
-            self.viewerplus.saveUndo()
+                self.current_blobs.append(blob)
+                self.drawBlob(blob)
 
         self.infoMessage.emit("Segmentation done.")
         self.log.emit("[TOOL][SAMPREDICTOR] Segmentation ends.")
@@ -355,6 +380,60 @@ class SAMPredictor(Tool):
         blob = Blob(region, left_map_pos, top_map_pos, blob_id)
 
         return blob
+
+    def drawBlob(self, blob):
+        """
+
+        """
+
+        # get the scene
+        scene = self.viewerplus.scene
+
+        # if it has just been created remove the current graphics item in order to set it again
+        if blob.qpath_gitem is not None:
+            scene.removeItem(blob.qpath_gitem)
+            del blob.qpath_gitem
+            blob.qpath_gitem = None
+
+        blob.setupForDrawing()
+
+        pen = QPen(Qt.white)
+        pen.setWidth(2)
+        pen.setCosmetic(True)
+
+        if self.blob_to_correct is None:
+            brush = QBrush(Qt.SolidPattern)
+            brush.setColor(Qt.white)
+        else:
+            brush = self.viewerplus.project.classBrushFromName(self.blob_to_correct)
+
+        brush.setStyle(Qt.Dense4Pattern)
+
+        blob.qpath_gitem = scene.addPath(blob.qpath, pen, brush)
+        blob.qpath_gitem.setZValue(1)
+        blob.qpath_gitem.setOpacity(self.viewerplus.transparency_value)
+
+    def undrawBlob(self, blob):
+        """
+
+        """
+        # Get the scene
+        scene = self.viewerplus.scene
+        # Undraw
+        scene.removeItem(blob.qpath_gitem)
+        blob.qpath = None
+        blob.qpath_gitem = None
+        scene.invalidate()
+
+    def undrawAllBlobs(self):
+        """
+
+        """
+        # Undraw all blobs in list
+        if len(self.current_blobs) > 0:
+            for blob in self.current_blobs:
+                self.undrawBlob(blob)
+        self.current_blobs = []
 
     def loadNetwork(self):
 
@@ -406,7 +485,6 @@ class SAMPredictor(Tool):
         """
         self.image_resized = None
         self.image_cropped = None
-        self.work_area_points = []
         self.work_area_bbox = [0, 0, 0, 0]
         if self.work_area_item is not None:
             self.viewerplus.scene.removeItem(self.work_area_item)
