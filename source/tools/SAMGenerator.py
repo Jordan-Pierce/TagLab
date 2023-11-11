@@ -1,40 +1,44 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication, QMessageBox
 from PyQt5.QtGui import QPen, QBrush
+from source.utils import qimageToNumpyArray, cropQImage
 
 from source.Blob import Blob
 from source.tools.Tool import Tool
-from source.utils import qimageToNumpyArray
-from source.utils import cropQImage
 
 import os
 import cv2
 import numpy as np
+import matplotlib.pyplot as plt
+from scipy import ndimage as ndi
 from skimage.measure import regionprops
 
 import torch
+import torchvision
 
+from segment_anything import SamPredictor
 from segment_anything import sam_model_registry
-from segment_anything import SamAutomaticMaskGenerator
+from segment_anything.utils.amg import build_all_layer_point_grids
 
 from models.dataloaders import helpers as helpers
 
 
 class SAMGenerator(Tool):
-
     def __init__(self, viewerplus, pick_points):
         super(SAMGenerator, self).__init__(viewerplus)
-
         # User defined points
         self.pick_points = pick_points
 
         # Image is resized to
-        self.resize_to = 2048
-        # Padding amount
+        self.resize_to = 1024
         # Model Type (b, l, or h)
         self.sam_model_type = 'vit_b'
         # Mask score threshold
         self.score_threshold = 0.80
+        # IoU score threshold
+        self.iou_threshold = 0.3
+        # Number of points
+        self.num_points = 4
         # For debugging
         self.debug = False
 
@@ -42,80 +46,171 @@ class SAMGenerator(Tool):
         self.width = None
         self.height = None
 
+        # Set image
+        self.image_resized = None
+        self.image_cropped = None
+
         # SAM, CUDA or CPU
-        self.samgenerator_net = None
+        self.sampredictor_net = None
         self.device = None
 
         # Drawing on GUI
-        self.CROSS_LINE_WIDTH = 2
-        self.pick_style = {'width': self.CROSS_LINE_WIDTH, 'color': Qt.green, 'size': 6}
         self.work_area_bbox = None
         self.work_area_item = None
+        self.work_points = []
+
+        self.CROSS_LINE_WIDTH = 2
+        self.work_pick_style = {'width': self.CROSS_LINE_WIDTH, 'color': Qt.cyan, 'size': 8}
+        self.pos_pick_style = {'width': self.CROSS_LINE_WIDTH, 'color': Qt.green, 'size': 4}
 
     def leftPressed(self, x, y, mods):
         """
 
         """
-        # Get the user defined points
-        points = np.asarray(self.pick_points.points).astype(int)
+        self.loadNetwork()
 
-        # Left-Click san Shift, re-define work area
-        if mods == Qt.ShiftModifier:
+        # User is still selecting work area
+        if not self.sampredictor_net.is_image_set:
 
-            # User changes mind about work area
-            if len(points) == 2:
+            # Collect points to set work area
+            if len(self.pick_points.points) < 2:
+                self.pick_points.addPoint(x, y, self.work_pick_style)
+
+            # User choose a third point without pressing
+            # SPACE, so reset the work area points, add
+            else:
                 self.pick_points.reset()
+                self.pick_points.addPoint(x, y, self.work_pick_style)
 
-            # Add the latest point
-            self.pick_points.addPoint(x, y, self.pick_style)
-            # Update working area
-            self.updateWorkArea()
+        # User has already selected a work area, and now
+        # is choosing to increase or decrease the amount of points
+        else:
+            self.setWorkPoints(1)
 
-
-    def updateWorkArea(self):
+    def rightPressed(self, x, y, mods):
         """
-        User defined work area
+
         """
-        self.resetWorkArea()
+        self.loadNetwork()
 
-        # Get the current points
-        points = np.asarray(self.pick_points.points).astype(int)
+        # User is still selecting work area
+        if not self.sampredictor_net.is_image_set:
 
-        # If there are points, update the working area
-        # Otherwise skip displaying a work area, as it
-        # hasn't been established by two points yet
-        if len(points) == 2:
+            # Collect points to set work area
+            if len(self.pick_points.points) < 2:
+                self.pick_points.addPoint(x, y, self.work_pick_style)
 
-            x = points[:, 0].min()
-            y = points[:, 1].min()
-            w = points[:, 0].max() - x
-            h = points[:, 1].max() - y
+            # User choose a third point without pressing
+            # SPACE, so reset the work area points, add
+            else:
+                self.pick_points.reset()
+                self.pick_points.addPoint(x, y, self.work_pick_style)
 
-            self.work_area_bbox = [round(y), round(x), round(w), round(h)]
-
-            # Display to GUI
-            brush = QBrush(Qt.NoBrush)
-            pen = QPen(Qt.DashLine)
-            pen.setWidth(2)
-            pen.setColor(Qt.white)
-            pen.setCosmetic(True)
-            x = self.work_area_bbox[1]
-            y = self.work_area_bbox[0]
-            w = self.work_area_bbox[2]
-            h = self.work_area_bbox[3]
-            self.work_area_item = self.viewerplus.scene.addRect(x, y, w, h, pen, brush)
-            self.work_area_item.setZValue(3)
+        # User has already selected a work area, and now
+        # is choosing to increase or decrease the amount of points
+        else:
+            self.setWorkPoints(-1)
 
     def apply(self):
         """
+        User presses SPACE to set work area, and again later to run the model
+        """
+
+        # User has already selected work area, and pressed SPACE
+        if self.sampredictor_net.is_image_set:
+            self.segmentWithSAMPredictor()
+
+        # User has finished creating working area, saving work area
+        if len(self.pick_points.points) == 2 and not self.sampredictor_net.is_image_set:
+            self.setWorkArea()
+            self.setWorkPoints()
+
+    def setWorkArea(self):
+        """
+        Set the work area based on the location of points
+        """
+
+        points = np.array(self.pick_points.points)
+
+        x = points[:, 0].min()
+        y = points[:, 1].min()
+        w = points[:, 0].max() - x
+        h = points[:, 1].max() - y
+
+        self.work_area_bbox = [round(y), round(x), round(w), round(h)]
+
+        # Display to GUI
+        brush = QBrush(Qt.NoBrush)
+        pen = QPen(Qt.DashLine)
+        pen.setWidth(2)
+        pen.setColor(Qt.white)
+        pen.setCosmetic(True)
+        x = self.work_area_bbox[1]
+        y = self.work_area_bbox[0]
+        w = self.work_area_bbox[2]
+        h = self.work_area_bbox[3]
+        self.work_area_item = self.viewerplus.scene.addRect(x, y, w, h, pen, brush)
+        self.work_area_item.setZValue(3)
+
+        # From the current view, crop the image
+        image_cropped = cropQImage(self.viewerplus.img_map, self.work_area_bbox)
+        self.image_cropped = qimageToNumpyArray(image_cropped)
+
+        # Resize the cropped QImage
+        self.image_resized = helpers.fixed_resize(self.image_cropped,
+                                                  (self.resize_to, self.resize_to)).astype(np.uint8)
+
+        # Prepare via CUDA
+        x = self.prepareImage(self.image_resized)
+
+        # Do use torch here, as it's fast as hell
+        self.sampredictor_net.set_torch_image(x, self.image_resized.shape[0:2])
+        self.sampredictor_net.set_image(self.image_resized)
+        self.pick_points.reset()
+
+    def prepareImage(self, arr):
+        """
 
         """
-        if len(self.pick_points.points) == 2:
-            self.loadNetwork()
-            self.segmentWithSAMGenerator()
-            self.resetWorkArea()
-            self.pick_points.reset()
-            self.labels = []
+        shape = (self.resize_to, self.resize_to)
+        trans = torchvision.transforms.Compose([torchvision.transforms.Resize(shape, antialias=True)])
+        image = torch.as_tensor(arr).cuda()
+        transformed_image = trans(image.permute(2, 0, 1)).unsqueeze(0)
+
+        return transformed_image
+
+    def setWorkPoints(self, delta=0):
+        """
+
+        """
+        # Reset the current points shown
+        self.pick_points.reset()
+
+        # Change the number of points to display
+        self.num_points += delta
+
+        # Get the updated number of points
+        x_pts, y_pts = build_all_layer_point_grids(self.num_points, 0, 1)[0].T
+
+        left = self.work_area_bbox[1]
+        top = self.work_area_bbox[0]
+
+        # Change coordinates to match viewer
+        x_pts = (x_pts * self.image_cropped.shape[1]) + left
+        y_pts = (y_pts * self.image_cropped.shape[0]) + top
+
+        # Add all of them to the list
+        for x, y in list(zip(x_pts, y_pts)):
+            self.pick_points.addPoint(x, y, self.pos_pick_style)
+
+    def preparePoints(self):
+        """
+        Get grid of points
+        """
+
+        points_resized = build_all_layer_point_grids(self.num_points, 0, 1)[0] * self.resize_to
+
+        return points_resized
 
     def resizeArray(self, arr, shape, interpolation=cv2.INTER_CUBIC):
         """
@@ -123,24 +218,14 @@ class SAMGenerator(Tool):
         """
         return cv2.resize(arr.astype(float), shape, interpolation)
 
-    def prepareForSAMGenerator(self):
-        """
-        Obtain the image from defined work area
-        """
-
-        image_cropped = cropQImage(self.viewerplus.img_map, self.work_area_bbox)
-        image_cropped = qimageToNumpyArray(image_cropped)
-
-        return image_cropped
-
-    def segmentWithSAMGenerator(self):
+    def segmentWithSAMPredictor(self):
 
         if not self.viewerplus.img_map:
             return
 
-        self.infoMessage.emit("Segmentation is ongoing..")
-        self.log.emit("[TOOL][SAMGENERATOR] Segmentation begins..")
         QApplication.setOverrideCursor(Qt.WaitCursor)
+        self.infoMessage.emit("Segmentation is ongoing..")
+        self.log.emit("[TOOL][SAMPREDICTOR] Segmentation begins..")
 
         # Mosaic dimensions
         self.width = self.viewerplus.img_map.size().width()
@@ -150,32 +235,73 @@ class SAMGenerator(Tool):
         left_map_pos = self.work_area_bbox[1]
         top_map_pos = self.work_area_bbox[0]
 
-        # Crop the image from the work area
-        image_cropped = self.prepareForSAMGenerator()
-        # Resize the cropped image
-        image_resized = helpers.fixed_resize(image_cropped,
-                                             (self.resize_to, self.resize_to)).astype(np.uint8)
+        # Points in the cropped image
+        points_resized = self.preparePoints()
+        # Labels for the points
+        point_labels = np.array([1] * len(points_resized))
 
-        # Generate masks
-        generated_outputs = self.samgenerator_net.generate(image_resized)
+        # Convert to torch, cuda
+        input_labels = torch.tensor(point_labels).to(self.device).unsqueeze(1)
 
-        for idx, generated_output in enumerate(generated_outputs):
+        input_points = torch.as_tensor(points_resized.astype(int), dtype=torch.int64).to(self.device).unsqueeze(1)
+        transformed_points = self.sampredictor_net.transform.apply_coords_torch(input_points,
+                                                                                self.image_resized.shape[:2])
 
-            # Extract the generated output
-            area = generated_output['area']
-            mask_resized = generated_output['segmentation']
-            # Maybe use these to filter masks?
-            iou_score = generated_output['predicted_iou']
-            stable_score = generated_output['stability_score']
-            # Image dimensions
-            crop_box = generated_output['crop_box']
+        try:
+            # Make prediction given points
+            masks, scores, logits = self.sampredictor_net.predict_torch(point_coords=transformed_points,
+                                                                        point_labels=input_labels,
+                                                                        multimask_output=False)
+        except:
+            # Create a box with a warning
+            box = QMessageBox()
+            box.setText(f"You selected more points than your GPU can handle!")
+            box.exec()
+            self.reset()
+            return False
+
+        # Squeeze
+        masks = masks.squeeze()
+        scores = scores.squeeze()
+
+        # Filter the masks to save time
+        masks = masks[scores > self.score_threshold]
+        masks = self.removeSimilarMasks(masks, self.iou_threshold)
+
+        for idx, generated_output in enumerate(masks):
+
+            # Get the current mask
+            mask_resized = masks[idx]
+            # Fill in while still small
+            mask_resized = ndi.binary_fill_holes(mask_resized).astype(float)
+
             # Region contain masked object
-            bbox = generated_output['bbox']
+            indices = np.argwhere(mask_resized)
+
+            # Calculate the x, y, width, and height
+            x = indices[:, 1].min()
+            y = indices[:, 0].min()
+            w = indices[:, 1].max() - x + 1
+            h = indices[:, 0].max() - y + 1
+            bbox = np.array([x, y, w, h])
 
             # Resize mask back to cropped size
-            target_shape = (image_cropped.shape[:2][::-1])
+            target_shape = (self.image_cropped.shape[:2][::-1])
             mask_cropped = self.resizeArray(mask_resized, target_shape, cv2.INTER_CUBIC)
-            mask_cropped = mask_cropped.astype(np.uint8)
+            mask_cropped = self.smoothVertices(mask_cropped).astype(np.uint8)
+
+            if self.debug:
+                os.makedirs("debug", exist_ok=True)
+                plt.figure(figsize=(10, 10))
+                plt.subplot(2, 1, 1)
+                plt.imshow(self.image_cropped)
+                plt.imshow(mask_cropped, alpha=0.5)
+                plt.subplot(2, 1, 2)
+                plt.imshow(self.image_resized)
+                plt.imshow(mask_resized, alpha=0.5)
+                plt.scatter(points_resized.T[0], points_resized.T[1], c='red', s=100)
+                plt.savefig(r"debug\SegmentationOutput.png")
+                plt.close()
 
             # Create a blob manually using provided information
             blob = self.createBlob(mask_resized, mask_cropped, bbox, left_map_pos, top_map_pos)
@@ -185,10 +311,69 @@ class SAMGenerator(Tool):
                 self.blobInfo.emit(blob, "[TOOL][SAMGENERATOR][BLOB-CREATED]")
             self.viewerplus.saveUndo()
 
-        QApplication.restoreOverrideCursor()
         self.infoMessage.emit("Segmentation done.")
-        self.log.emit("[TOOL][SAMGENERATOR] Segmentation ends.")
-        self.resetWorkArea()
+        self.log.emit("[TOOL][SAMPREDICTOR] Segmentation ends.")
+
+        self.reset()
+        QApplication.restoreOverrideCursor()
+
+    def binaryMaskIOU(self, mask1, mask2):
+        """
+
+        """
+        mask1_area = torch.sum(mask1)
+        mask2_area = torch.sum(mask2)
+        intersection = torch.sum(mask1 * mask2)
+        iou = intersection / (mask1_area + mask2_area - intersection)
+
+        return iou.item()
+
+    def removeSimilarMasks(self, mask_list, iou_threshold):
+        """
+
+        """
+
+        # Create an empty list to store the unique masks
+        unique_masks = []
+
+        # Iterate through the input mask list
+        for mask in mask_list:
+            # Flag to keep track if the mask is similar to any existing unique mask
+            is_similar = False
+
+            # Iterate through the unique masks to compare with the current mask
+            for unique_mask in unique_masks:
+                iou = self.binaryMaskIOU(mask, unique_mask)
+                if iou >= iou_threshold:
+                    is_similar = True
+                    break
+
+            # If the mask is not similar to any existing unique mask, add it to the list
+            if not is_similar:
+                unique_masks.append(mask)
+
+        # Convert the unique masks back to NumPy arrays for the output
+        unique_masks = [mask.cpu().numpy().astype(bool) for mask in unique_masks]
+
+        return unique_masks
+
+    def smoothVertices(self, arr):
+
+        # Find the contours in the binary mask
+        contours, _ = cv2.findContours(arr.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        # Choose the largest contour if there are multiple
+        largest_contour = max(contours, key=cv2.contourArea)
+
+        # Simplify the contour with a specified tolerance
+        epsilon = 0.0001 * cv2.arcLength(largest_contour, True)
+        simplified_contour = cv2.approxPolyDP(largest_contour, epsilon, True)
+
+        # Create a new binary mask with the smoothed contour
+        new_arr = np.zeros_like(arr, dtype=np.uint8)
+        cv2.fillPoly(new_arr, [simplified_contour], 1)
+
+        return new_arr
 
     def createBlob(self, mask_src, mask_dst, bbox_src, left_map_pos, top_map_pos, omit_border_masks=True):
         """
@@ -271,7 +456,7 @@ class SAMGenerator(Tool):
 
     def loadNetwork(self):
 
-        if self.samgenerator_net is None:
+        if self.sampredictor_net is None:
             self.infoMessage.emit("Loading SAM network..")
 
             # Mapping between the model type, and the checkpoint file name
@@ -300,9 +485,7 @@ class SAMGenerator(Tool):
                 # Loading the model, returning the predictor
                 sam_model = sam_model_registry[self.sam_model_type](checkpoint=path)
                 sam_model.to(device=device)
-                self.samgenerator_net = SamAutomaticMaskGenerator(sam_model,
-                                                                  points_per_side=16,
-                                                                  points_per_batch=128)
+                self.sampredictor_net = SamPredictor(sam_model)
                 self.device = device
 
     def resetNetwork(self):
@@ -311,14 +494,16 @@ class SAMGenerator(Tool):
         """
 
         torch.cuda.empty_cache()
-        if self.samgenerator_net is not None:
-            del self.samgenerator_net
-            self.samgenerator_net = None
+        if self.sampredictor_net is not None:
+            del self.sampredictor_net
+            self.sampredictor_net = None
 
     def resetWorkArea(self):
         """
         Reset working area
         """
+        self.image_resized = None
+        self.image_cropped = None
         self.work_area_bbox = [0, 0, 0, 0]
         if self.work_area_item is not None:
             self.viewerplus.scene.removeItem(self.work_area_item)
@@ -329,5 +514,6 @@ class SAMGenerator(Tool):
         Reset everything
         """
         self.resetNetwork()
-        self.resetWorkArea()
         self.pick_points.reset()
+        self.num_points = 4
+        self.resetWorkArea()
