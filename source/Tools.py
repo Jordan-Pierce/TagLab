@@ -105,7 +105,7 @@ class Tools(object):
     def rightPressed(self, x, y, mods=None):
         if self.tool == "RITM":
             self.tools[self.tool].rightPressed(x, y, mods)
-        elif self.tool == "SAMPREDICTOR":
+        elif self.tool in ["SAMPREDICTOR", "SAMGENERATOR"]:
             self.tools[self.tool].rightPressed(x, y, mods)
 
     def mouseMove(self, x, y):

@@ -36,9 +36,9 @@ class SAMGenerator(Tool):
         # Mask score threshold
         self.score_threshold = 0.80
         # IoU score threshold
-        self.iou_threshold = 0.3
+        self.iou_threshold = 0.50
         # Number of points
-        self.num_points = 4
+        self.num_points = 8
         # For debugging
         self.debug = False
 
@@ -262,11 +262,11 @@ class SAMGenerator(Tool):
 
         # Squeeze
         masks = masks.squeeze()
-        scores = scores.squeeze()
+        scores = scores.squeeze().cpu().numpy()
 
         # Filter the masks to save time
         masks = masks[scores > self.score_threshold]
-        masks = self.removeSimilarMasks(masks, self.iou_threshold)
+        masks = self.removeSimilarMasks(masks, scores, self.iou_threshold)
 
         for idx, generated_output in enumerate(masks):
 
@@ -328,31 +328,36 @@ class SAMGenerator(Tool):
 
         return iou.item()
 
-    def removeSimilarMasks(self, mask_list, iou_threshold):
+    def removeSimilarMasks(self, mask_list, scores_list, iou_threshold):
         """
 
         """
+        unique_masks = []  # List to store the unique masks
+        unique_scores = []  # List to store the scores corresponding to unique masks
+        masks_to_skip_indices = set()  # Set to store indices of masks to skip
 
-        # Create an empty list to store the unique masks
-        unique_masks = []
+        for i, (mask, score) in enumerate(zip(mask_list, scores_list)):
+            if i in masks_to_skip_indices:
+                continue  # Skip masks that are already identified as similar
 
-        # Iterate through the input mask list
-        for mask in mask_list:
-            # Flag to keep track if the mask is similar to any existing unique mask
             is_similar = False
 
-            # Iterate through the unique masks to compare with the current mask
-            for unique_mask in unique_masks:
+            for j, (unique_mask, unique_score) in enumerate(zip(unique_masks, unique_scores)):
                 iou = self.binaryMaskIOU(mask, unique_mask)
                 if iou >= iou_threshold:
                     is_similar = True
+                    masks_to_skip_indices.add(i)
+                    if score > unique_score:
+                        # Retain the mask with the higher score
+                        unique_masks[j] = mask
+                        unique_scores[j] = score
                     break
 
-            # If the mask is not similar to any existing unique mask, add it to the list
             if not is_similar:
                 unique_masks.append(mask)
+                unique_scores.append(score)
 
-        # Convert the unique masks back to NumPy arrays for the output
+        # Create a new list with only the unique masks and corresponding scores
         unique_masks = [mask.cpu().numpy().astype(bool) for mask in unique_masks]
 
         return unique_masks
@@ -407,7 +412,7 @@ class SAMGenerator(Tool):
             # May remove this if users prefer to keep those and clean
             # them manually afterwards, but it appears to be more work
             # ********************************************************
-            eps = 3
+            eps = 1
 
             # Is the mask along the:
             min_mosaic = True
@@ -515,5 +520,5 @@ class SAMGenerator(Tool):
         """
         self.resetNetwork()
         self.pick_points.reset()
-        self.num_points = 4
+        self.num_points = 8
         self.resetWorkArea()
