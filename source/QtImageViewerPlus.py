@@ -643,7 +643,7 @@ class QtImageViewerPlus(QtImageViewer):
                 (tool in ["CUT", "EDITBORDER", "RITM"] and len(self.selected_blobs) > 1):
             self.resetSelection()
 
-        if tool in ["RITM", "SAMPREDICTOR"]:
+        if tool in ["RITM", "SAMPREDICTOR", "SAMGENERATOR"]:
             self.setContextMenuPolicy(Qt.NoContextMenu)
         else:
             self.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -765,8 +765,8 @@ class QtImageViewerPlus(QtImageViewer):
             if self.tools.tool == "RITM":
                 self.tools.rightPressed(x, y, mods)
 
-            # Add negative points with right-click; shift + left-click activates SAM
-            elif self.tools.tool == 'SAMPREDICTOR':
+            #
+            elif self.tools.tool in ['SAMPREDICTOR', 'SAMGENERATOR']:
                 self.tools.rightPressed(x, y, mods)
 
             else:

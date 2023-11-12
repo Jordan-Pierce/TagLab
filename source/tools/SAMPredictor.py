@@ -14,6 +14,7 @@ from scipy import ndimage as ndi
 from skimage.measure import regionprops
 
 import torch
+import torchvision
 
 from segment_anything import sam_model_registry
 from segment_anything import SamPredictor
@@ -51,7 +52,6 @@ class SAMPredictor(Tool):
         self.device = None
 
         # Drawing on GUI
-        self.work_area_points = []
         self.work_area_bbox = None
         self.work_area_item = None
 
@@ -215,18 +215,14 @@ class SAMPredictor(Tool):
 
         # From the current view, crop the image
         image_cropped = cropQImage(self.viewerplus.img_map, self.work_area_bbox)
-        image_cropped = qimageToNumpyArray(image_cropped)
+        self.image_cropped = qimageToNumpyArray(image_cropped)
 
-        # Resize the cropped image
-        image_resized = helpers.fixed_resize(image_cropped,
-                                             (self.resize_to, self.resize_to)).astype(np.uint8)
+        # Resize the cropped QImage
+        self.image_resized = helpers.fixed_resize(self.image_cropped,
+                                                  (self.resize_to, self.resize_to)).astype(np.uint8)
 
-        # Retain the images
-        self.image_cropped = image_cropped
-        self.image_resized = image_resized
-
-        # Set the image
-        self.sampredictor_net.set_image(image_resized)
+        # Don't use torch here, as the image resize is fixed to 1024
+        self.sampredictor_net.set_image(self.image_resized)
         self.pick_points.reset()
 
     def resizeArray(self, arr, shape, interpolation=cv2.INTER_CUBIC):
@@ -235,7 +231,7 @@ class SAMPredictor(Tool):
         """
         return cv2.resize(arr.astype(float), shape, interpolation)
 
-    def prepareForSAMPredictor(self):
+    def preparePoints(self):
         """
         Get the image based on point(s) location
         """
@@ -278,16 +274,22 @@ class SAMPredictor(Tool):
         top_map_pos = self.work_area_bbox[0]
 
         # Points in the cropped image
-        points_cropped, points_resized = self.prepareForSAMPredictor()
+        points_cropped, points_resized = self.preparePoints()
 
-        # Transform the points, create labels
-        input_points = points_resized.astype(int)
-        input_labels = np.array(self.labels)
+        # Convert to torch, cuda
+        input_labels = torch.tensor(np.array(self.labels)).to(self.device).unsqueeze(0)
+        input_points = torch.as_tensor(points_resized.astype(int), dtype=torch.int64).to(self.device).unsqueeze(0)
+        transformed_points = self.sampredictor_net.transform.apply_coords_torch(input_points,
+                                                                                self.image_resized.shape[:2])
 
         # Make prediction given points
-        mask, score, logit = self.sampredictor_net.predict(point_coords=input_points,
-                                                           point_labels=input_labels,
-                                                           multimask_output=False)
+        mask, score, logit = self.sampredictor_net.predict_torch(point_coords=transformed_points,
+                                                                 point_labels=input_labels,
+                                                                 multimask_output=False)
+
+        # Move back to CPU
+        mask = mask.detach().cpu().numpy()
+        score = score.detach().cpu().numpy()
 
         # If mask score is too low, just return early
         if score.squeeze() < self.score_threshold:
@@ -311,7 +313,7 @@ class SAMPredictor(Tool):
             # Resize mask back to cropped size
             target_shape = (self.image_cropped.shape[:2][::-1])
             mask_cropped = self.resizeArray(mask_resized, target_shape, cv2.INTER_CUBIC)
-            mask_cropped = mask_cropped.astype(np.uint8)
+            mask_cropped = self.smoothVertices(mask_cropped).astype(np.uint8)
 
             if self.debug:
                 os.makedirs("debug", exist_ok=True)
@@ -340,6 +342,24 @@ class SAMPredictor(Tool):
         self.log.emit("[TOOL][SAMPREDICTOR] Segmentation ends.")
 
         QApplication.restoreOverrideCursor()
+
+    def smoothVertices(self, arr):
+
+        # Find the contours in the binary mask
+        contours, _ = cv2.findContours(arr.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        # Choose the largest contour if there are multiple
+        largest_contour = max(contours, key=cv2.contourArea)
+
+        # Simplify the contour with a specified tolerance
+        epsilon = 0.0001 * cv2.arcLength(largest_contour, True)
+        simplified_contour = cv2.approxPolyDP(largest_contour, epsilon, True)
+
+        # Create a new binary mask with the smoothed contour
+        new_arr = np.zeros_like(arr, dtype=np.uint8)
+        cv2.fillPoly(new_arr, [simplified_contour], 1)
+
+        return new_arr
 
     def createBlob(self, mask_src, mask_dst, bbox_src, left_map_pos, top_map_pos):
         """
