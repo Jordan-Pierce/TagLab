@@ -30,7 +30,10 @@ class SAMGenerator(Tool):
         self.pick_points = pick_points
 
         # Image is resized to
-        self.resize_to = 1024
+        self.longest_side = 1024
+        # Resize dimensions
+        self.resize_width = None
+        self.resize_height = None
         # Model Type (b, l, or h)
         self.sam_model_type = 'vit_b'
         # Mask score threshold
@@ -167,6 +170,23 @@ class SAMGenerator(Tool):
         self.pick_points.addPoint(right, bottom, self.work_pick_style)
         self.pick_points.addPoint(right, top, self.work_pick_style)
 
+    def setAspectRatio(self):
+        """
+
+        """
+
+        # Calculate the original width and height
+        original_height, original_width = self.image_cropped.shape[0:2]
+
+        # Calculate the new height to preserve the aspect ratio
+        new_height = int((self.longest_side / original_width) * original_height)
+
+        self.resize_width = self.longest_side
+        self.resize_height = new_height
+
+        # if self.height > self.width:
+        #     self.height, self.width = self.width, self.height
+
     def setWorkArea(self):
         """
         Set the work area based on the location of points
@@ -198,28 +218,16 @@ class SAMGenerator(Tool):
         image_cropped = cropQImage(self.viewerplus.img_map, self.work_area_bbox)
         self.image_cropped = qimageToNumpyArray(image_cropped)
 
+        # Set the aspect ratio of the cropped image
+        self.setAspectRatio()
+
         # Resize the cropped QImage
         self.image_resized = helpers.fixed_resize(self.image_cropped,
-                                                  (self.resize_to, self.resize_to)).astype(np.uint8)
+                                                  (self.resize_width, self.resize_height)).astype(np.uint8)
 
-        # Prepare via CUDA
-        x = self.prepareImage(self.image_resized)
-
-        # Do use torch here, as it's fast as hell
-        self.sampredictor_net.set_torch_image(x, self.image_resized.shape[0:2])
+        # Don't use torch here, as the image resize is fixed to 1024
         self.sampredictor_net.set_image(self.image_resized)
         self.pick_points.reset()
-
-    def prepareImage(self, arr):
-        """
-
-        """
-        shape = (self.resize_to, self.resize_to)
-        trans = torchvision.transforms.Compose([torchvision.transforms.Resize(shape, antialias=True)])
-        image = torch.as_tensor(arr).to(self.device)
-        transformed_image = trans(image.permute(2, 0, 1)).unsqueeze(0)
-
-        return transformed_image
 
     def setWorkPoints(self, delta=0):
         """
@@ -250,7 +258,10 @@ class SAMGenerator(Tool):
         Get grid of points
         """
 
-        points_resized = build_all_layer_point_grids(self.num_points, 0, 1)[0] * self.resize_to
+        points_resized = build_all_layer_point_grids(self.num_points, 0, 1)[0]
+
+        points_resized[:, 0] *= self.resize_width
+        points_resized[:, 1] *= self.resize_height
 
         return points_resized
 
@@ -319,6 +330,9 @@ class SAMGenerator(Tool):
 
             # Region contain masked object
             indices = np.argwhere(mask_resized)
+
+            if not len(indices):
+                continue
 
             # Calculate the x, y, width, and height
             x = indices[:, 1].min()
