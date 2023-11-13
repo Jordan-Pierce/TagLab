@@ -29,7 +29,10 @@ class SAMPredictor(Tool):
         self.pick_points = pick_points
 
         # Image is resized to
-        self.resize_to = 2048
+        self.longest_side = 2048
+        # Resize dimensions
+        self.resize_width = None
+        self.resize_height = None
         # Model Type (b, l, or h)
         self.sam_model_type = 'vit_b'
         # Mask score threshold
@@ -206,6 +209,20 @@ class SAMPredictor(Tool):
         self.pick_points.addPoint(right, bottom, self.work_pick_style)
         self.pick_points.addPoint(right, top, self.work_pick_style)
 
+    def setAspectRatio(self):
+        """
+
+        """
+
+        # Calculate the original width and height
+        original_height, original_width = self.image_cropped.shape[0:2]
+
+        # Calculate the new height to preserve the aspect ratio
+        new_height = int((self.longest_side / original_width) * original_height)
+
+        self.resize_width = self.longest_side
+        self.resize_height = new_height
+
     def setWorkArea(self):
         """
         Set the work area based on the location of points
@@ -241,9 +258,12 @@ class SAMPredictor(Tool):
         image_cropped = cropQImage(self.viewerplus.img_map, self.work_area_bbox)
         self.image_cropped = qimageToNumpyArray(image_cropped)
 
+        # Set the aspect ratio of the cropped image
+        self.setAspectRatio()
+
         # Resize the cropped QImage
         self.image_resized = helpers.fixed_resize(self.image_cropped,
-                                                  (self.resize_to, self.resize_to)).astype(np.uint8)
+                                                  (self.resize_width, self.resize_height)).astype(np.uint8)
 
         # Don't use torch here, as the image resize is fixed to 1024
         self.sampredictor_net.set_image(self.image_resized)
@@ -561,6 +581,7 @@ class SAMPredictor(Tool):
         Reset everything
         """
         self.resetNetwork()
+        self.undrawAllBlobs()
         self.pick_points.reset()
         self.labels = []
         self.resetWorkArea()
