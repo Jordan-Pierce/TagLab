@@ -174,7 +174,7 @@ class SAMGenerator(Tool):
         """
         shape = (self.resize_to, self.resize_to)
         trans = torchvision.transforms.Compose([torchvision.transforms.Resize(shape, antialias=True)])
-        image = torch.as_tensor(arr).cuda()
+        image = torch.as_tensor(arr).to(self.device)
         transformed_image = trans(image.permute(2, 0, 1)).unsqueeze(0)
 
         return transformed_image
