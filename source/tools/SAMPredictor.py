@@ -135,33 +135,18 @@ class SAMPredictor(Tool):
         User presses SPACE to set work area, and again later to run the model
         """
 
-        # User has finished clicking points, saving current blob
-        if len(self.pick_points.points) and self.sampredictor_net.is_image_set:
+        # User has chosen the current view as the working area, saving work area
+        if len(self.pick_points.points) == 0 and self.sampredictor_net is None:
+            self.loadNetwork()
+            self.getExtent()
+            self.setWorkArea()
 
-            # Finalize created blob
-            message = "[TOOL][SAMPREDICTOR][BLOB-CREATED]"
-            for blob in self.current_blobs:
-
-                if self.blob_to_correct is not None:
-                    self.viewerplus.removeBlob(self.blob_to_correct)
-                    blob.id = self.blob_to_correct.id
-                    blob.class_name = self.blob_to_correct.class_name
-                    message = "[TOOL][SAMPREDICTOR][BLOB-EDITED]"
-
-                # order is important: first add then setblob class!
-                self.undrawBlob(blob)
-                self.viewerplus.addBlob(blob, selected=True)
-                self.blobInfo.emit(blob, message)
-
-            self.viewerplus.saveUndo()
-            self.viewerplus.resetSelection()
-            self.pick_points.reset()
-            self.labels = []
-            self.current_blobs = []
-            self.blob_to_correct = None
+        # User has finished selecting points, submitting current blob
+        elif len(self.pick_points.points) and self.sampredictor_net.is_image_set:
+            self.submitBlobs()
 
         # User has finished creating working area, saving work area
-        if len(self.pick_points.points) == 2 and not self.sampredictor_net.is_image_set:
+        elif len(self.pick_points.points) == 2 and not self.sampredictor_net.is_image_set:
             self.setWorkArea()
 
     def points_within_workarea(self):
@@ -186,10 +171,49 @@ class SAMPredictor(Tool):
 
         return not np.any(outside_boundaries)
 
+    def getExtent(self):
+        """
+
+        """
+
+        # Mosaic dimensions
+        self.width = self.viewerplus.img_map.size().width()
+        self.height = self.viewerplus.img_map.size().height()
+
+        # Current extent
+        rect_map = self.viewerplus.viewportToScene()
+
+        top = round(rect_map.top())
+        left = round(rect_map.left())
+        width = round(rect_map.width())
+        height = round(rect_map.height())
+        bottom = top + height
+        right = left + width
+
+        # If the current extent includes areas outside the
+        # mosaic, reduce it to be only the mosaic
+        if top < 0:
+            top = 0
+        if left < 0:
+            left = 0
+        if bottom > self.height:
+            bottom = self.height
+        if right > self.width:
+            right = self.width
+
+        self.pick_points.addPoint(left, top, self.work_pick_style)
+        self.pick_points.addPoint(left, bottom, self.work_pick_style)
+        self.pick_points.addPoint(right, bottom, self.work_pick_style)
+        self.pick_points.addPoint(right, top, self.work_pick_style)
+
     def setWorkArea(self):
         """
         Set the work area based on the location of points
         """
+
+        # Mosaic dimensions
+        self.width = self.viewerplus.img_map.size().width()
+        self.height = self.viewerplus.img_map.size().height()
 
         points = np.array(self.pick_points.points)
 
@@ -264,10 +288,6 @@ class SAMPredictor(Tool):
         QApplication.setOverrideCursor(Qt.WaitCursor)
         self.infoMessage.emit("Segmentation is ongoing..")
         self.log.emit("[TOOL][SAMPREDICTOR] Segmentation begins..")
-
-        # Mosaic dimensions
-        self.width = self.viewerplus.img_map.size().width()
-        self.height = self.viewerplus.img_map.size().height()
 
         # Get the work area top-left
         left_map_pos = self.work_area_bbox[1]
@@ -454,6 +474,32 @@ class SAMPredictor(Tool):
             for blob in self.current_blobs:
                 self.undrawBlob(blob)
         self.current_blobs = []
+
+    def submitBlobs(self):
+        """
+
+        """
+        # Finalize created blob
+        message = "[TOOL][SAMPREDICTOR][BLOB-CREATED]"
+        for blob in self.current_blobs:
+
+            if self.blob_to_correct is not None:
+                self.viewerplus.removeBlob(self.blob_to_correct)
+                blob.id = self.blob_to_correct.id
+                blob.class_name = self.blob_to_correct.class_name
+                message = "[TOOL][SAMPREDICTOR][BLOB-EDITED]"
+
+            # order is important: first add then setblob class!
+            self.undrawBlob(blob)
+            self.viewerplus.addBlob(blob, selected=True)
+            self.blobInfo.emit(blob, message)
+
+        self.viewerplus.saveUndo()
+        self.viewerplus.resetSelection()
+        self.pick_points.reset()
+        self.labels = []
+        self.current_blobs = []
+        self.blob_to_correct = None
 
     def loadNetwork(self):
 
