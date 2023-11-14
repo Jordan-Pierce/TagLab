@@ -69,8 +69,8 @@ class SAMPredictor(Tool):
 
     def leftPressed(self, x, y, mods):
         """
-        Positive points
-        """
+		Positive points
+		"""
         self.loadNetwork()
 
         # User is still selecting work area
@@ -101,8 +101,8 @@ class SAMPredictor(Tool):
 
     def rightPressed(self, x, y, mods):
         """
-        Negative points
-        """
+		Negative points
+		"""
 
         self.loadNetwork()
 
@@ -135,8 +135,8 @@ class SAMPredictor(Tool):
 
     def apply(self):
         """
-        User presses SPACE to set work area, and again later to run the model
-        """
+		User presses SPACE to set work area, and again later to run the model
+		"""
 
         # User has chosen the current view as the working area, saving work area
         if len(self.pick_points.points) == 0 and self.sampredictor_net is None:
@@ -154,8 +154,8 @@ class SAMPredictor(Tool):
 
     def points_within_workarea(self):
         """
-        Checks if selected points are within established work area
-        """
+		Checks if selected points are within established work area
+		"""
 
         # Define the boundaries
         left_map_pos = self.work_area_bbox[1]
@@ -177,7 +177,7 @@ class SAMPredictor(Tool):
     def getExtent(self):
         """
 
-        """
+		"""
 
         # Mosaic dimensions
         self.width = self.viewerplus.img_map.size().width()
@@ -212,7 +212,7 @@ class SAMPredictor(Tool):
     def setAspectRatio(self):
         """
 
-        """
+		"""
 
         # Calculate the original width and height
         original_height, original_width = self.image_cropped.shape[0:2]
@@ -225,8 +225,8 @@ class SAMPredictor(Tool):
 
     def setWorkArea(self):
         """
-        Set the work area based on the location of points
-        """
+		Set the work area based on the location of points
+		"""
 
         # Mosaic dimensions
         self.width = self.viewerplus.img_map.size().width()
@@ -352,8 +352,7 @@ class SAMPredictor(Tool):
 
             # Resize mask back to cropped size
             target_shape = (self.image_cropped.shape[:2][::-1])
-            mask_cropped = self.resizeArray(mask_resized, target_shape, cv2.INTER_CUBIC)
-            mask_cropped = self.smoothVertices(mask_cropped).astype(np.uint8)
+            mask_cropped = self.resizeArray(mask_resized, target_shape, cv2.INTER_LINEAR).astype(np.uint8)
 
             if self.debug:
                 os.makedirs("debug", exist_ok=True)
@@ -383,7 +382,10 @@ class SAMPredictor(Tool):
 
         QApplication.restoreOverrideCursor()
 
-    def smoothVertices(self, arr):
+    def smoothVertices(self, arr, window_size=3):
+        """
+
+        """
 
         # Find the contours in the binary mask
         contours, _ = cv2.findContours(arr.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -391,20 +393,33 @@ class SAMPredictor(Tool):
         # Choose the largest contour if there are multiple
         largest_contour = max(contours, key=cv2.contourArea)
 
-        # Simplify the contour with a specified tolerance
-        epsilon = 0.0001 * cv2.arcLength(largest_contour, True)
-        simplified_contour = cv2.approxPolyDP(largest_contour, epsilon, True)
+        # Extract the vertices from the largest contour
+        vertices = [tuple(point[0]) for point in largest_contour]
+
+        # Smooth the vertices
+        smoothed_vertices = []
+        half_window = window_size // 2
+
+        for i in range(len(vertices)):
+            start = max(0, i - half_window)
+            end = min(len(vertices), i + half_window + 1)
+            avg_x = sum(p[0] for p in vertices[start:end]) / (end - start)
+            avg_y = sum(p[1] for p in vertices[start:end]) / (end - start)
+            smoothed_vertices.append((avg_x, avg_y))
+
+        # Convert smoothed vertices back to numpy array
+        smoothed_contour = np.array(smoothed_vertices, dtype=np.int32)
 
         # Create a new binary mask with the smoothed contour
         new_arr = np.zeros_like(arr, dtype=np.uint8)
-        cv2.fillPoly(new_arr, [simplified_contour], 1)
+        cv2.fillPoly(new_arr, [smoothed_contour], 1)
 
         return new_arr
 
     def createBlob(self, mask_src, mask_dst, bbox_src, left_map_pos, top_map_pos):
         """
-        Create a blob manually given the generated mask
-        """
+		Create a blob manually given the generated mask
+		"""
 
         # Bbox of the area of interest before scaled
         x1_src, y1_src, w_src, h_src = bbox_src
@@ -444,7 +459,7 @@ class SAMPredictor(Tool):
     def drawBlob(self, blob):
         """
 
-        """
+		"""
 
         # get the scene
         scene = self.viewerplus.scene
@@ -476,7 +491,7 @@ class SAMPredictor(Tool):
     def undrawBlob(self, blob):
         """
 
-        """
+		"""
         # Get the scene
         scene = self.viewerplus.scene
         # Undraw
@@ -488,7 +503,7 @@ class SAMPredictor(Tool):
     def undrawAllBlobs(self):
         """
 
-        """
+		"""
         # Undraw all blobs in list
         if len(self.current_blobs) > 0:
             for blob in self.current_blobs:
@@ -498,7 +513,7 @@ class SAMPredictor(Tool):
     def submitBlobs(self):
         """
 
-        """
+		"""
         # Finalize created blob
         message = "[TOOL][SAMPREDICTOR][BLOB-CREATED]"
         for blob in self.current_blobs:
@@ -543,7 +558,7 @@ class SAMPredictor(Tool):
                 box.setText(f"Model weights {self.sam_model_type} cannot be found in models folder.\n"
                             f"If they have not been downloaded, re-run the install script.")
                 box.exec()
-                # Go back to GUI without closing program
+            # Go back to GUI without closing program
 
             else:
                 # Set the device; users should be using a CUDA GPU, otherwise tool is slow
@@ -557,8 +572,8 @@ class SAMPredictor(Tool):
 
     def resetNetwork(self):
         """
-        Reset the network
-        """
+		Reset the network
+		"""
 
         torch.cuda.empty_cache()
         if self.sampredictor_net is not None:
@@ -567,8 +582,8 @@ class SAMPredictor(Tool):
 
     def resetWorkArea(self):
         """
-        Reset working area
-        """
+		Reset working area
+		"""
         self.image_resized = None
         self.image_cropped = None
         self.work_area_bbox = [0, 0, 0, 0]
@@ -578,8 +593,8 @@ class SAMPredictor(Tool):
 
     def reset(self):
         """
-        Reset everything
-        """
+		Reset everything
+		"""
         self.resetNetwork()
         self.undrawAllBlobs()
         self.pick_points.reset()

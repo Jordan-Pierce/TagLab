@@ -184,9 +184,6 @@ class SAMGenerator(Tool):
         self.resize_width = self.longest_side
         self.resize_height = new_height
 
-        # if self.height > self.width:
-        #     self.height, self.width = self.width, self.height
-
     def setWorkArea(self):
         """
         Set the work area based on the location of points
@@ -343,8 +340,7 @@ class SAMGenerator(Tool):
 
             # Resize mask back to cropped size
             target_shape = (self.image_cropped.shape[:2][::-1])
-            mask_cropped = self.resizeArray(mask_resized, target_shape, cv2.INTER_CUBIC)
-            mask_cropped = self.smoothVertices(mask_cropped).astype(np.uint8)
+            mask_cropped = self.resizeArray(mask_resized, target_shape, cv2.INTER_LINEAR).astype(np.uint8)
 
             if self.debug:
                 os.makedirs("debug", exist_ok=True)
