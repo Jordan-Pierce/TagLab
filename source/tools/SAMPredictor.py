@@ -386,7 +386,6 @@ class SAMPredictor(Tool):
         """
 
         """
-
         # Find the contours in the binary mask
         contours, _ = cv2.findContours(arr.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -418,8 +417,8 @@ class SAMPredictor(Tool):
 
     def createBlob(self, mask_src, mask_dst, bbox_src, left_map_pos, top_map_pos):
         """
-		Create a blob manually given the generated mask
-		"""
+        Create a blob manually given the generated mask
+        """
 
         # Bbox of the area of interest before scaled
         x1_src, y1_src, w_src, h_src = bbox_src
@@ -459,8 +458,7 @@ class SAMPredictor(Tool):
     def drawBlob(self, blob):
         """
 
-		"""
-
+        """
         # get the scene
         scene = self.viewerplus.scene
 
@@ -491,7 +489,7 @@ class SAMPredictor(Tool):
     def undrawBlob(self, blob):
         """
 
-		"""
+        """
         # Get the scene
         scene = self.viewerplus.scene
         # Undraw
@@ -503,7 +501,7 @@ class SAMPredictor(Tool):
     def undrawAllBlobs(self):
         """
 
-		"""
+        """
         # Undraw all blobs in list
         if len(self.current_blobs) > 0:
             for blob in self.current_blobs:
@@ -513,7 +511,7 @@ class SAMPredictor(Tool):
     def submitBlobs(self):
         """
 
-		"""
+        """
         # Finalize created blob
         message = "[TOOL][SAMPREDICTOR][BLOB-CREATED]"
         for blob in self.current_blobs:
@@ -572,9 +570,8 @@ class SAMPredictor(Tool):
 
     def resetNetwork(self):
         """
-		Reset the network
-		"""
-
+        Reset the network
+        """
         torch.cuda.empty_cache()
         if self.sampredictor_net is not None:
             del self.sampredictor_net
@@ -582,8 +579,8 @@ class SAMPredictor(Tool):
 
     def resetWorkArea(self):
         """
-		Reset working area
-		"""
+        Reset working area
+        """
         self.image_resized = None
         self.image_cropped = None
         self.work_area_bbox = [0, 0, 0, 0]
@@ -593,8 +590,8 @@ class SAMPredictor(Tool):
 
     def reset(self):
         """
-		Reset everything
-		"""
+        Reset everything
+        """
         self.resetNetwork()
         self.undrawAllBlobs()
         self.pick_points.reset()
