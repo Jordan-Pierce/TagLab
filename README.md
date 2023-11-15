@@ -63,8 +63,8 @@ conda create --name taglab python=3.8 -y
 # Activate the environment
 conda activate taglab
 
-# Within the TagLab folder, run the install_w_conda.py script
-python install_w_conda.py [cpu]
+# Within the TagLab folder, run the install_conda_windows.py script
+python install_conda_windows.py [cpu]
 
 # Run TagLab
 python Taglab.py
