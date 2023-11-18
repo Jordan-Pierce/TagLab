@@ -32,11 +32,14 @@ TagLab allows to :
 - export shapefiles
 - export a new dataset and train your network (!)
 
-#### ✨ New Features (10/2023):
+#### ✨ New Features:
+- 10/2023
   - install script for Windows using [Anaconda](https://docs.conda.io/projects/miniconda/en/latest/); see Installation instructions below
   - [Segment Anything Model (SAM)](https://github.com/facebookresearch/segment-anything) 
     - [`Predictor` for one-click segmentations](https://www.youtube.com/watch?v=J3_uKzHn9HU)
     - [`Generator` for automatic segmentations]()
+- 11/2023
+  - "Add New Images..." feature; users can bulk import images to annotate in addition to photomosaics
 
 We are working hard to create a web site with detailed instructions about TagLab. Stay tuned(!)
 
