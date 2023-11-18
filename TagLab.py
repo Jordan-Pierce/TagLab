@@ -50,8 +50,7 @@ try:
     from torch.nn.functional import upsample
 except Exception as e:
     print("Incompatible version between pytorch, cuda and python.\n" +
-          "Knowing working version combinations are\n: Cuda 10.0, pytorch 1.0.0, python 3.6.8" + str(
-        e))
+          "Knowing working version combinations are\n: Cuda 10.0, pytorch 1.0.0, python 3.6.8" + str(e))
 # exit()
 
 # CUSTOM
@@ -61,6 +60,7 @@ from source.QtImageViewerPlus import QtImageViewerPlus
 from source.QtMapViewer import QtMapViewer
 from source.QtSettingsWidget import QtSettingsWidget
 from source.QtMapSettingsWidget import QtMapSettingsWidget
+from source.QtImageSettingsWidget import QtImageSettingsWidget
 from source.QtScaleWidget import QtScaleWidget
 from source.QtWorkingAreaWidget import QtWorkingAreaWidget
 from source.QtCropWidget import QtCropWidget
@@ -180,6 +180,7 @@ class TagLab(QMainWindow):
         ##### INTERFACE #####
         #####################
 
+        self.imageWidget = None
         self.mapWidget = None
         self.projectEditor = None
         self.alignToolWidget = None
@@ -235,7 +236,8 @@ class TagLab(QMainWindow):
         self.btnRuler = self.newButton("ruler.png", "Measure tool", flatbuttonstyle1, self.ruler)
         self.btnDeepExtreme = self.newButton("dexter.png", "4-clicks segmentation", flatbuttonstyle2, self.deepExtreme)
         self.btnRitm = self.newButton("ritm.png", "Positive/negative clicks segmentation", flatbuttonstyle2, self.ritm)
-        self.btnAutoClassification = self.newButton("auto.png", "Fully auto semantic segmentation", flatbuttonstyle2, self.selectClassifier)
+        self.btnAutoClassification = self.newButton("auto.png", "Fully auto semantic segmentation", flatbuttonstyle2,
+                                                    self.selectClassifier)
         self.btnSAMPredictor = self.newButton("sam_pred.png", "SAM Predictor", flatbuttonstyle2, self.samPredictor)
         self.btnSAMGenerator = self.newButton("sam_gen.png", "SAM Generator", flatbuttonstyle2, self.samGenerator)
 
@@ -251,7 +253,8 @@ class TagLab(QMainWindow):
         self.labelSeparator2.setPixmap(self.pxmapSeparator2.scaled(QSize(35, 30)))
 
         self.btnSplitScreen = self.newButton("split.png", "Split screen", flatbuttonstyle1, self.toggleComparison)
-        self.btnAutoMatch = self.newButton("automatch.png", "Compute automatic matches", flatbuttonstyle1, self.autoCorrespondences)
+        self.btnAutoMatch = self.newButton("automatch.png", "Compute automatic matches", flatbuttonstyle1,
+                                           self.autoCorrespondences)
         self.btnMatch = self.newButton("manualmatch.png", "Add manual matches ", flatbuttonstyle1, self.matchTool)
 
         # NOTE: Automatic matches button is not checkable
@@ -910,6 +913,11 @@ class TagLab(QMainWindow):
             self.recentFileActs.append(
                 QAction(self, visible=False, triggered=self.openRecentProject))
 
+        newImageAct = QAction("Add New Image(s)...", self)
+        newImageAct.setShortcut('Ctrl+L')
+        newImageAct.setStatusTip("Add new images to the project")
+        newImageAct.triggered.connect(self.setImageToLoad)
+
         newMapAct = QAction("Add New Map...", self)
         newMapAct.setShortcut('Ctrl+L')
         newMapAct.setStatusTip("Add a new map to the project")
@@ -1063,6 +1071,7 @@ class TagLab(QMainWindow):
 
         self.projectmenu = menubar.addMenu("&Project")
         self.projectmenu.setStyleSheet(styleMenu)
+        self.projectmenu.addAction(newImageAct)
         self.projectmenu.addAction(newMapAct)
         self.projectmenu.addAction(projectEditorAct)
         self.projectmenu.addSeparator()
@@ -2309,7 +2318,7 @@ class TagLab(QMainWindow):
         self.viewerplus.hideScalebar()
 
         # RE-INITIALIZATION
-
+        self.imageWidget = None
         self.mapWidget = None
         self.working_area_widget = None
         self.classifierWidget = None
@@ -3088,6 +3097,25 @@ class TagLab(QMainWindow):
             if self.editProjectWidget.isHidden():
                 self.editProjectWidget.show()
 
+    @pyqtSlot()
+    def setImageToLoad(self):
+
+        if self.imageWidget is None:
+
+            self.imageWidget = QtImageSettingsWidget(parent=self)
+            self.imageWidget.setWindowModality(Qt.WindowModal)
+            self.imageWidget.accepted.connect(self.setImageProperties)
+            self.imageWidget.show()
+
+        else:
+
+            # show it again
+            self.imageWidget.enableRGBloading()
+            self.imageWidget.accepted.disconnect()
+            self.imageWidget.accepted.connect(self.setImageProperties)
+            if self.imageWidget.isHidden():
+                self.imageWidget.show()
+
     # REFACTOR load project properties
     @pyqtSlot()
     def setMapToLoad(self):
@@ -3318,6 +3346,47 @@ class TagLab(QMainWindow):
             image.annotations.blobAdded.connect(self.updatePanelInfo)
             image.annotations.blobRemoved.connect(self.resetPanelInfo)
 
+    @pyqtSlot()
+    def setImageProperties(self):
+
+        dir = QDir(self.taglab_dir)
+
+        try:
+
+            # Loop through the files that were added by user
+            for _ in range(self.imageWidget.data['count']):
+
+                # Create the image object
+                image = Image(
+                    map_px_to_mm_factor=1.0,
+                    id=self.imageWidget.data['names'][_],
+                    name=self.imageWidget.data['names'][_],
+                    acquisition_date=self.imageWidget.data['acquisition_dates'][_]
+                )
+
+                # Set RGB image
+                rgb_filename = dir.relativeFilePath(self.imageWidget.data['rgb_filenames'][_])
+                image.addChannel(rgb_filename, "RGB")
+
+                # Add the image and its annotation to the project
+                self.project.addNewImage(image)
+                self.updateToolStatus()
+                self.updateImageSelectionMenu()
+                self.layers_widget.setProject(self.project)
+
+                # Show the image
+                self.showImage(image)
+
+        except Exception as e:
+            msgBox = QMessageBox()
+            msgBox.setWindowTitle(self.TAGLAB_VERSION)
+            msgBox.setText("Error creating image:" + str(e))
+            msgBox.exec()
+            return
+
+        # Close the widget after adding all images
+        self.imageWidget.close()
+
     # REFACTOR
     @pyqtSlot()
     def setMapProperties(self):
@@ -3376,7 +3445,6 @@ class TagLab(QMainWindow):
                        self.btnGrid,
                        self.btnSAMPredictor,
                        self.btnSAMGenerator]:
-
             button.setEnabled(len(self.project.images) > 0)
 
         for button in [self.btnSplitScreen, self.btnAutoMatch, self.btnMatch]:
