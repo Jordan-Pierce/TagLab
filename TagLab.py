@@ -397,13 +397,21 @@ class TagLab(QMainWindow):
         self.labelZoom = QLabel("Zoom:")
         self.labelMouseLeft = QLabel("x:")
         self.labelMouseTop = QLabel("y:")
+        # Users want to know in pixels the
+        # view dimensions to assist with tools
+        self.labelViewWidth = QLabel("w:")
+        self.labelViewHeight = QLabel("h:")
 
         self.labelZoomInfo = QLabel("100%")
         self.labelMouseLeftInfo = QLabel("0")
         self.labelMouseTopInfo = QLabel("0")
+        self.labelViewWidthInfo = QLabel("0")
+        self.labelViewHeightInfo = QLabel("0")
         self.labelZoomInfo.setMinimumWidth(70)
         self.labelMouseLeftInfo.setMinimumWidth(70)
         self.labelMouseTopInfo.setMinimumWidth(70)
+        self.labelViewWidthInfo.setMinimumWidth(70)
+        self.labelViewHeightInfo.setMinimumWidth(70)
 
         layout_header = QHBoxLayout()
         layout_header.addWidget(QLabel("Map:  "))
@@ -424,6 +432,10 @@ class TagLab(QMainWindow):
         layout_header.addWidget(self.labelMouseLeftInfo)
         layout_header.addWidget(self.labelMouseTop)
         layout_header.addWidget(self.labelMouseTopInfo)
+        layout_header.addWidget(self.labelViewWidth)
+        layout_header.addWidget(self.labelViewWidthInfo)
+        layout_header.addWidget(self.labelViewHeight)
+        layout_header.addWidget(self.labelViewHeightInfo)
 
         layout_viewers = QHBoxLayout()
         layout_viewers.addWidget(self.viewerplus)
@@ -2285,6 +2297,12 @@ class TagLab(QMainWindow):
         zf = self.viewerplus.zoom_factor * 100.0
         zoom = "{:6.0f}%".format(zf)
         self.labelZoomInfo.setText(zoom)
+
+        width = "{:5d}".format(int(round(right - left)))
+        height = "{:5d}".format(int(round(bottom - top)))
+
+        self.labelViewWidthInfo.setText(width)
+        self.labelViewHeightInfo.setText(height)
 
         self.map_top = top
         self.map_left = left

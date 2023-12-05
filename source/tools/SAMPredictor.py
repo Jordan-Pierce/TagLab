@@ -1,20 +1,18 @@
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QPointF
 from PyQt5.QtWidgets import QApplication, QMessageBox
-from PyQt5.QtGui import QPen, QBrush
-from source.utils import qimageToNumpyArray, cropQImage
+from PyQt5.QtGui import QPen, QBrush, QFont
 
 from source.Blob import Blob
 from source.tools.Tool import Tool
+from source.utils import qimageToNumpyArray, cropQImage
 
 import os
 import cv2
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy import ndimage as ndi
 from skimage.measure import regionprops
 
 import torch
-import torchvision
 
 from segment_anything import sam_model_registry
 from segment_anything import SamPredictor
@@ -57,6 +55,8 @@ class SAMPredictor(Tool):
         # Drawing on GUI
         self.work_area_bbox = None
         self.work_area_item = None
+        self.work_area_text_tl = None
+        self.work_area_text_br = None
 
         # Updating masks/blobs
         self.current_blobs = []
@@ -69,8 +69,9 @@ class SAMPredictor(Tool):
 
     def leftPressed(self, x, y, mods):
         """
-		Positive points
-		"""
+        Positive points
+        """
+
         self.loadNetwork()
 
         # User is still selecting work area
@@ -101,8 +102,8 @@ class SAMPredictor(Tool):
 
     def rightPressed(self, x, y, mods):
         """
-		Negative points
-		"""
+        Negative points
+        """
 
         self.loadNetwork()
 
@@ -135,9 +136,8 @@ class SAMPredictor(Tool):
 
     def apply(self):
         """
-		User presses SPACE to set work area, and again later to run the model
-		"""
-
+        User presses SPACE to set work area, and again later to run the model
+        """
         # User has chosen the current view as the working area, saving work area
         if len(self.pick_points.points) == 0 and self.sampredictor_net is None:
             self.loadNetwork()
@@ -154,9 +154,8 @@ class SAMPredictor(Tool):
 
     def points_within_workarea(self):
         """
-		Checks if selected points are within established work area
-		"""
-
+        Checks if selected points are within established work area
+        """
         # Define the boundaries
         left_map_pos = self.work_area_bbox[1]
         top_map_pos = self.work_area_bbox[0]
@@ -177,8 +176,7 @@ class SAMPredictor(Tool):
     def getExtent(self):
         """
 
-		"""
-
+        """
         # Mosaic dimensions
         self.width = self.viewerplus.img_map.size().width()
         self.height = self.viewerplus.img_map.size().height()
@@ -212,8 +210,7 @@ class SAMPredictor(Tool):
     def setAspectRatio(self):
         """
 
-		"""
-
+        """
         # Calculate the original width and height
         original_height, original_width = self.image_cropped.shape[0:2]
 
@@ -225,8 +222,10 @@ class SAMPredictor(Tool):
 
     def setWorkArea(self):
         """
-		Set the work area based on the location of points
-		"""
+        Set the work area based on the location of points
+        """
+
+        from source.QtImageViewerPlus import TextItem
 
         # Mosaic dimensions
         self.width = self.viewerplus.img_map.size().width()
@@ -241,7 +240,7 @@ class SAMPredictor(Tool):
 
         self.work_area_bbox = [round(y), round(x), round(w), round(h)]
 
-        # Display to GUI
+        # Draw box
         brush = QBrush(Qt.NoBrush)
         pen = QPen(Qt.DashLine)
         pen.setWidth(2)
@@ -253,6 +252,28 @@ class SAMPredictor(Tool):
         h = self.work_area_bbox[3]
         self.work_area_item = self.viewerplus.scene.addRect(x, y, w, h, pen, brush)
         self.work_area_item.setZValue(3)
+
+        # Draw box dimensions (tl)
+        font_size = 8
+        text_item = TextItem(f"{w} x {h}", QFont("Roboto", font_size, QFont.Bold))
+        text_item.setPos(x + (len(str(w)) + 1) * font_size, y - font_size)
+        text_item.setTransformOriginPoint(QPointF(x, y))
+        text_item.setZValue(3)
+        text_item.setBrush(Qt.white)
+        text_item.setOpacity(1.0)
+        self.work_area_text_tl = text_item
+        self.viewerplus.scene.addItem(self.work_area_text_tl)
+
+        # Draw box dimensions (br)
+        font_size = 8
+        text_item = TextItem(f"{w} x {h}", QFont("Roboto", font_size, QFont.Bold))
+        text_item.setPos((x+w) - (len(str(w)) + 1) * font_size, (y+h) + font_size)
+        text_item.setTransformOriginPoint(QPointF(x+w, y+h))
+        text_item.setZValue(3)
+        text_item.setBrush(Qt.white)
+        text_item.setOpacity(1.0)
+        self.work_area_text_br = text_item
+        self.viewerplus.scene.addItem(self.work_area_text_br)
 
         # From the current view, crop the image
         image_cropped = cropQImage(self.viewerplus.img_map, self.work_area_bbox)
@@ -301,7 +322,9 @@ class SAMPredictor(Tool):
         return points_cropped, points_resized
 
     def segmentWithSAMPredictor(self):
+        """
 
+        """
         if not self.viewerplus.img_map:
             return
 
@@ -353,20 +376,6 @@ class SAMPredictor(Tool):
             # Resize mask back to cropped size
             target_shape = (self.image_cropped.shape[:2][::-1])
             mask_cropped = self.resizeArray(mask_resized, target_shape, cv2.INTER_LINEAR).astype(np.uint8)
-
-            if self.debug:
-                os.makedirs("debug", exist_ok=True)
-                plt.figure(figsize=(10, 10))
-                plt.subplot(2, 1, 1)
-                plt.imshow(self.image_cropped)
-                plt.imshow(mask_cropped, alpha=0.5)
-                plt.scatter(points_cropped.T[0], points_cropped.T[1], c='red', s=100)
-                plt.subplot(2, 1, 2)
-                plt.imshow(self.image_resized)
-                plt.imshow(mask_resized, alpha=0.5)
-                plt.scatter(points_resized.T[0], points_resized.T[1], c='red', s=100)
-                plt.savefig(r"debug\SegmentationOutput.png")
-                plt.close()
 
             self.undrawAllBlobs()
 
@@ -585,7 +594,11 @@ class SAMPredictor(Tool):
         self.image_cropped = None
         self.work_area_bbox = [0, 0, 0, 0]
         if self.work_area_item is not None:
+            self.viewerplus.scene.removeItem(self.work_area_text_tl)
+            self.viewerplus.scene.removeItem(self.work_area_text_br)
             self.viewerplus.scene.removeItem(self.work_area_item)
+            self.work_area_text_tl = None
+            self.work_area_text_br = None
             self.work_area_item = None
 
     def reset(self):

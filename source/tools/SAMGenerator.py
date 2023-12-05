@@ -1,10 +1,10 @@
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QPointF
 from PyQt5.QtWidgets import QApplication, QMessageBox
-from PyQt5.QtGui import QPen, QBrush
-from source.utils import qimageToNumpyArray, cropQImage
+from PyQt5.QtGui import QPen, QBrush, QFont
 
 from source.Blob import Blob
 from source.tools.Tool import Tool
+from source.utils import qimageToNumpyArray, cropQImage
 
 import os
 import cv2
@@ -34,7 +34,7 @@ class SAMGenerator(Tool):
         # Model Type (b, l, or h)
         self.sam_model_type = 'vit_b'
         # Number of points
-        self.num_points = 32
+        self.num_points = 16
         # For debugging
         self.debug = False
 
@@ -54,6 +54,8 @@ class SAMGenerator(Tool):
         self.work_area_set = False
         self.work_area_bbox = None
         self.work_area_item = None
+        self.work_area_text_tl = None
+        self.work_area_text_br = None
         self.work_points = []
 
         self.CROSS_LINE_WIDTH = 2
@@ -179,6 +181,8 @@ class SAMGenerator(Tool):
         Set the work area based on the location of points
         """
 
+        from source.QtImageViewerPlus import TextItem
+
         points = np.array(self.pick_points.points)
 
         x = points[:, 0].min()
@@ -188,7 +192,7 @@ class SAMGenerator(Tool):
 
         self.work_area_bbox = [round(y), round(x), round(w), round(h)]
 
-        # Display to GUI
+        # Draw box
         brush = QBrush(Qt.NoBrush)
         pen = QPen(Qt.DashLine)
         pen.setWidth(2)
@@ -200,6 +204,28 @@ class SAMGenerator(Tool):
         h = self.work_area_bbox[3]
         self.work_area_item = self.viewerplus.scene.addRect(x, y, w, h, pen, brush)
         self.work_area_item.setZValue(3)
+
+        # Draw box dimensions (tl)
+        font_size = 8
+        text_item = TextItem(f"{w} x {h}", QFont("Roboto", font_size, QFont.Bold))
+        text_item.setPos(x + (len(str(w)) + 1) * font_size, y - font_size)
+        text_item.setTransformOriginPoint(QPointF(x, y))
+        text_item.setZValue(3)
+        text_item.setBrush(Qt.white)
+        text_item.setOpacity(1.0)
+        self.work_area_text_tl = text_item
+        self.viewerplus.scene.addItem(self.work_area_text_tl)
+
+        # Draw box dimensions (br)
+        font_size = 8
+        text_item = TextItem(f"{w} x {h}", QFont("Roboto", font_size, QFont.Bold))
+        text_item.setPos((x+w) - (len(str(w)) + 1) * font_size, (y+h) + font_size)
+        text_item.setTransformOriginPoint(QPointF(x+w, y+h))
+        text_item.setZValue(3)
+        text_item.setBrush(Qt.white)
+        text_item.setOpacity(1.0)
+        self.work_area_text_br = text_item
+        self.viewerplus.scene.addItem(self.work_area_text_br)
 
         # From the current view, crop the image
         image_cropped = cropQImage(self.viewerplus.img_map, self.work_area_bbox)
@@ -247,6 +273,9 @@ class SAMGenerator(Tool):
         return cv2.resize(arr.astype(float), shape, interpolation)
 
     def segmentWithSAMGenerator(self):
+        """
+
+        """
 
         if not self.viewerplus.img_map:
             return
@@ -426,14 +455,18 @@ class SAMGenerator(Tool):
         """
         Reset working area
         """
-        self.num_points = 32
+        self.num_points = 16
         self.pick_points.reset()
         self.image_resized = None
         self.image_cropped = None
         self.work_area_set = False
         self.work_area_bbox = [0, 0, 0, 0]
         if self.work_area_item is not None:
+            self.viewerplus.scene.removeItem(self.work_area_text_tl)
+            self.viewerplus.scene.removeItem(self.work_area_text_br)
             self.viewerplus.scene.removeItem(self.work_area_item)
+            self.work_area_text_tl = None
+            self.work_area_text_br = None
             self.work_area_item = None
 
     def reset(self):
