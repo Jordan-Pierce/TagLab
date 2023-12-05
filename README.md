@@ -40,6 +40,10 @@ TagLab allows to :
     - [`Generator` for automatic segmentations]()
 - 11/2023
   - "Add New Images..." feature; users can bulk import images to annotate in addition to photomosaics
+- 12/2023
+  - Width and Height of current view is shown in top-right (updates w/ zoom)
+  - Users can mark grid cells as complete from within SAM and pos/neg (RITM) tools
+  - Working area for SAM and pos/neg (RITM) tools will show you the dimensions of the working area
 
 We are working hard to create a web site with detailed instructions about TagLab. Stay tuned(!)
 
