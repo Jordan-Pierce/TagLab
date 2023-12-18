@@ -76,7 +76,66 @@ python install_conda_windows.py [cpu]
 # Run TagLab
 python Taglab.py
 ```
-For further instructions on installing TagLab see the [wiki](https://github.com/cnr-isti-vclab/TagLab/wiki/Install-TagLab) for more information.
+For further instructions on installing TagLab see below.
+
+### Step 1: Install Anaconda
+
+1. **Download Anaconda:**
+   - Go to the [Anaconda website](https://www.anaconda.com/products/distribution).
+   - Download the appropriate version for your Windows system (e.g., 64-bit or 32-bit).
+   - Follow the installation instructions provided on the website.
+
+### Step 2: Open Anaconda Command Prompt
+
+1. **Search for Anaconda Command Prompt:**
+   - Press the `Windows` key on your keyboard.
+   - Type "Anaconda Command Prompt" and press `Enter`.
+
+### Step 3: Create a Conda Environment for TagLab
+
+1. **Create a new conda environment:**
+   - In the Anaconda Command Prompt, type the following command and press `Enter`:
+     ```bash
+     conda create --name taglab python=3.8 -y
+     ```
+   - This command creates a new conda environment named "taglab" with Python version 3.8.
+
+### Step 4: Activate the Conda Environment
+
+1. **Activate the conda environment:**
+   - Type the following command and press `Enter`:
+     ```bash
+     conda activate taglab
+     ```
+   - Your command prompt should now show that you are in the "taglab" environment.
+
+### Step 5: Download TagLab and Install Dependencies
+
+1. **Navigate to the TagLab folder:**
+   - Download this TagLab fork .
+   - Extract the contents of the downloaded zip file to a location on your computer.
+   - Open the Anaconda Command Prompt and navigate to the folder where TagLab is extracted, using the `cd` command. For example:
+     ```bash
+     cd path\to\Taglab
+     ```
+
+2. **Run the installation script:**
+   - Type the following command and press `Enter`:
+     ```bash
+     python install_conda_windows.py [cpu]
+     ```
+     - Replace `[cpu]` with nothing if CUDA is installed on your computer, or include `cpu` if CUDA is not installed.
+     - This script installs the necessary dependencies for TagLab.
+
+### Step 6: Run TagLab
+
+1. **Run TagLab:**
+   - After the installation is complete, you can run TagLab using the following command:
+     ```bash
+     python Taglab.py
+     ```
+   - This command starts TagLab, and you should now be able to use the tool within the activated conda environment.
+
 
 ## Updating TagLab
 
