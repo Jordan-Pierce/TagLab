@@ -286,9 +286,13 @@ class SAMPredictor(Tool):
         self.image_resized = helpers.fixed_resize(self.image_cropped,
                                                   (self.resize_width, self.resize_height)).astype(np.uint8)
 
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+
         # Don't use torch here, as the image resize is fixed to 1024
         self.sampredictor_net.set_image(self.image_resized)
         self.pick_points.reset()
+
+        QApplication.restoreOverrideCursor()
 
     def resizeArray(self, arr, shape, interpolation=cv2.INTER_CUBIC):
         """
@@ -546,6 +550,8 @@ class SAMPredictor(Tool):
     def loadNetwork(self):
 
         if self.sampredictor_net is None:
+
+            QApplication.setOverrideCursor(Qt.WaitCursor)
             self.infoMessage.emit("Loading SAM network..")
 
             # Mapping between the model type, and the checkpoint file name
@@ -576,6 +582,8 @@ class SAMPredictor(Tool):
                 sam_model.to(device=device)
                 self.sampredictor_net = SamPredictor(sam_model)
                 self.device = device
+
+            QApplication.restoreOverrideCursor()
 
     def resetNetwork(self):
         """

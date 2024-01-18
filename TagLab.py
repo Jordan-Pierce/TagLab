@@ -31,15 +31,13 @@ import numpy as np
 import urllib
 import platform
 
-from PyQt5.QtCore import Qt, QSize, QMargins, QDir, QPoint, QPointF, QRectF, QTimer, pyqtSlot, \
-    pyqtSignal, QSettings, QFileInfo, QModelIndex
-from PyQt5.QtGui import QFontDatabase, QFont, QPixmap, QIcon, QKeySequence, QPen, QImageReader, \
-    QImage
-from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow, QFileDialog, QComboBox, QMenuBar, \
-    QMenu, QSizePolicy, QScrollArea, \
-    QLabel, QToolButton, QPushButton, QSlider, QCheckBox, \
-    QMessageBox, QGroupBox, QLayout, QHBoxLayout, QVBoxLayout, QFrame, QDockWidget, QTextEdit, \
-    QAction
+from PyQt5.QtCore import Qt, QSize, QMargins, QDir, QPoint, QPointF, QRectF, QTimer
+from PyQt5.QtCore import pyqtSlot, pyqtSignal, QSettings, QFileInfo, QModelIndex
+from PyQt5.QtGui import QFontDatabase, QFont, QPixmap, QIcon, QKeySequence, QPen, QImageReader, QImage
+from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow, QFileDialog, QComboBox, QMenuBar, QAction
+from PyQt5.QtWidgets import QMenu, QSizePolicy, QScrollArea, QLabel, QToolButton, QPushButton, QSlider, QCheckBox
+from PyQt5.QtWidgets import QMessageBox, QGroupBox, QLayout, QHBoxLayout, QVBoxLayout, QFrame, QDockWidget, QTextEdit
+
 
 import pprint
 # PYTORCH
@@ -60,7 +58,6 @@ from source.QtImageViewerPlus import QtImageViewerPlus
 from source.QtMapViewer import QtMapViewer
 from source.QtSettingsWidget import QtSettingsWidget
 from source.QtMapSettingsWidget import QtMapSettingsWidget
-from source.QtImageSettingsWidget import QtImageSettingsWidget
 from source.QtScaleWidget import QtScaleWidget
 from source.QtWorkingAreaWidget import QtWorkingAreaWidget
 from source.QtCropWidget import QtCropWidget
@@ -86,14 +83,16 @@ from source.QtDictionaryWidget import QtDictionaryWidget
 from source.QtRegionAttributesWidget import QtRegionAttributesWidget
 from source.QtShapefileAttributeWidget import QtAttributeWidget
 from source.QtPanelInfo import QtPanelInfo
+from source.QtiView import QtiView
 
 from source import utils
 from source.Blob import Blob
 from source.Shape import Layer, Shape
 
 # training modules
-from models.coral_dataset import CoralsDataset
 import models.training as training
+
+
 
 # LOGGING
 import logging
@@ -192,6 +191,10 @@ class TagLab(QMainWindow):
         self.classifierWidget = None
         self.newDatasetWidget = None
 
+        # Additional features
+        self.iViewWidget = None
+
+
         self.trainYourNetworkWidget = None
         self.trainResultsWidget = None
         self.progress_bar = None
@@ -238,8 +241,12 @@ class TagLab(QMainWindow):
         self.btnRitm = self.newButton("ritm.png", "Positive/negative clicks segmentation", flatbuttonstyle2, self.ritm)
         self.btnAutoClassification = self.newButton("auto.png", "Fully auto semantic segmentation", flatbuttonstyle2,
                                                     self.selectClassifier)
+
+        # Additional features
         self.btnSAMPredictor = self.newButton("sam_pred.png", "SAM Predictor", flatbuttonstyle2, self.samPredictor)
         self.btnSAMGenerator = self.newButton("sam_gen.png", "SAM Generator", flatbuttonstyle2, self.samGenerator)
+        self.btniView = self.newButton("iview.png", "iView", flatbuttonstyle2, self.iView)
+
 
         # Split Screen operation removed from the toolbar
         self.pxmapSeparator = QPixmap(os.path.join(os.path.join(self.taglab_dir, "icons"), "separator.png"))
@@ -268,7 +275,7 @@ class TagLab(QMainWindow):
         layout_tools.addWidget(self.btnFreehand)
         layout_tools.addWidget(self.btnAssign)
         # layout_tools.addWidget(self.btnWatershed)
-        # layout_tools.addWidget(self.btnBricksSegmentation)
+        layout_tools.addWidget(self.btnBricksSegmentation)
         layout_tools.addWidget(self.btnEditBorder)
         layout_tools.addWidget(self.btnCut)
         layout_tools.addWidget(self.btnCreateCrack)
@@ -277,6 +284,7 @@ class TagLab(QMainWindow):
         layout_tools.addWidget(self.btnAutoClassification)
         layout_tools.addWidget(self.btnSAMPredictor)
         layout_tools.addWidget(self.btnSAMGenerator)
+        layout_tools.addWidget(self.btniView)
 
         layout_tools.addSpacing(3)
         layout_tools.addWidget(self.labelSeparator)
@@ -414,7 +422,7 @@ class TagLab(QMainWindow):
         self.labelViewHeightInfo.setMinimumWidth(70)
 
         layout_header = QHBoxLayout()
-        layout_header.addWidget(QLabel("Map:  "))
+        layout_header.addWidget(QLabel(""))
         layout_header.addWidget(self.comboboxSourceImage)
         layout_header.addWidget(self.comboboxTargetImage)
         layout_header.addStretch()
@@ -925,11 +933,6 @@ class TagLab(QMainWindow):
             self.recentFileActs.append(
                 QAction(self, visible=False, triggered=self.openRecentProject))
 
-        newImageAct = QAction("Add New Image(s)...", self)
-        newImageAct.setShortcut('Ctrl+L')
-        newImageAct.setStatusTip("Add new images to the project")
-        newImageAct.triggered.connect(self.setImageToLoad)
-
         newMapAct = QAction("Add New Map...", self)
         newMapAct.setShortcut('Ctrl+L')
         newMapAct.setStatusTip("Add a new map to the project")
@@ -1083,7 +1086,6 @@ class TagLab(QMainWindow):
 
         self.projectmenu = menubar.addMenu("&Project")
         self.projectmenu.setStyleSheet(styleMenu)
-        self.projectmenu.addAction(newImageAct)
         self.projectmenu.addAction(newMapAct)
         self.projectmenu.addAction(projectEditorAct)
         self.projectmenu.addSeparator()
@@ -1661,6 +1663,21 @@ class TagLab(QMainWindow):
                 pos = self.cursor().pos()
                 self.activeviewer.updateCellState(pos.x(), pos.y(), None)
 
+        elif event.key() == Qt.Key_Z:
+            # ACTIVATE "FIND CLOSEST IMAGE" TOOL
+            if self.iViewWidget is None:
+                # Widget needs to be active
+                pass
+            elif self.iViewWidget.metashapeChunk is None:
+                # Metashape chunk should be active
+                pass
+            else:
+                w = int(self.activeviewer.image.width)
+                h = int(self.activeviewer.image.height)
+                x = int(self.labelMouseLeftInfo.text())
+                y = int(self.labelMouseTopInfo.text())
+                self.iViewWidget.findClosestImage(x, y, w, h)
+
         elif event.key() == Qt.Key_1:
             # ACTIVATE "MOVE" TOOL
             self.move()
@@ -1707,7 +1724,7 @@ class TagLab(QMainWindow):
 
         elif event.key() == Qt.Key_Y:
             # ACTIVATE "SAM Generator" TOOL
-            self.samPredictor()
+            self.samGenerator()
 
         elif event.key() == Qt.Key_Q:
             # toggle fill
@@ -1766,7 +1783,6 @@ class TagLab(QMainWindow):
             if active_annotations.refine_depth_weight < 0.0:
                 active_annotations.refine_depth_weight = 0.0;
             print("Depth weight: " + str(active_annotations.refine_depth_weight))
-
 
         elif event.key() == Qt.Key_BracketLeft:
             active_annotations.refine_conservative *= 0.9
@@ -2352,6 +2368,7 @@ class TagLab(QMainWindow):
         self.last_image_loaded = None
         self.activeviewer = None
         self.contextMenuPosition = None
+        self.iViewWidget = None
         self.data_panel.clear()
         self.compare_panel.clear()
         self.comboboxSourceImage.clear()
@@ -3075,8 +3092,7 @@ class TagLab(QMainWindow):
         logfile.info(message3)
         logfile.info(message4)
 
-    # REFACTOR call create a new project and treplace the old one.
-
+    # REFACTOR call create a new project and replace the old one.
     @pyqtSlot()
     def newProject(self):
 
@@ -3114,25 +3130,6 @@ class TagLab(QMainWindow):
             self.editProjectWidget.populateMapList()
             if self.editProjectWidget.isHidden():
                 self.editProjectWidget.show()
-
-    @pyqtSlot()
-    def setImageToLoad(self):
-
-        if self.imageWidget is None:
-
-            self.imageWidget = QtImageSettingsWidget(parent=self)
-            self.imageWidget.setWindowModality(Qt.WindowModal)
-            self.imageWidget.accepted.connect(self.setImageProperties)
-            self.imageWidget.show()
-
-        else:
-
-            # show it again
-            self.imageWidget.enableRGBloading()
-            self.imageWidget.accepted.disconnect()
-            self.imageWidget.accepted.connect(self.setImageProperties)
-            if self.imageWidget.isHidden():
-                self.imageWidget.show()
 
     # REFACTOR load project properties
     @pyqtSlot()
@@ -3364,48 +3361,7 @@ class TagLab(QMainWindow):
             image.annotations.blobAdded.connect(self.updatePanelInfo)
             image.annotations.blobRemoved.connect(self.resetPanelInfo)
 
-    @pyqtSlot()
-    def setImageProperties(self):
-
-        dir = QDir(self.taglab_dir)
-
-        try:
-
-            # Loop through the files that were added by user
-            for _ in range(self.imageWidget.data['count']):
-
-                # Create the image object
-                image = Image(
-                    map_px_to_mm_factor=1.0,
-                    id=self.imageWidget.data['names'][_],
-                    name=self.imageWidget.data['names'][_],
-                    acquisition_date=self.imageWidget.data['acquisition_dates'][_]
-                )
-
-                # Set RGB image
-                rgb_filename = dir.relativeFilePath(self.imageWidget.data['rgb_filenames'][_])
-                image.addChannel(rgb_filename, "RGB")
-
-                # Add the image and its annotation to the project
-                self.project.addNewImage(image)
-                self.updateToolStatus()
-                self.updateImageSelectionMenu()
-                self.layers_widget.setProject(self.project)
-
-                # Show the image
-                self.showImage(image)
-
-        except Exception as e:
-            msgBox = QMessageBox()
-            msgBox.setWindowTitle(self.TAGLAB_VERSION)
-            msgBox.setText("Error creating image:" + str(e))
-            msgBox.exec()
-            return
-
-        # Close the widget after adding all images
-        self.imageWidget.close()
-
-    # REFACTOR
+    #REFACTOR
     @pyqtSlot()
     def setMapProperties(self):
 
@@ -3414,9 +3370,9 @@ class TagLab(QMainWindow):
         try:
 
             image = Image(
-                map_px_to_mm_factor=self.mapWidget.data["px_to_mm"],
-                id=self.mapWidget.data['name'],
-                name=self.mapWidget.data['name'],
+                map_px_to_mm_factor = self.mapWidget.data["px_to_mm"],
+                id = self.mapWidget.data['name'],
+                name = self.mapWidget.data['name'],
                 acquisition_date=self.mapWidget.data['acquisition_date']
             )
 
@@ -4545,6 +4501,35 @@ class TagLab(QMainWindow):
 
         message = "[PROJECT] The project " + self.project.filename + " has been saved."
         logfile.info(message)
+
+    @pyqtSlot()
+    def iView(self):
+        """
+
+        """
+        if self.activeviewer is None or self.activeviewer.image is None:
+            self.move()
+            return
+
+        if self.iViewWidget is None:
+            self.btniView.setChecked(True)
+            self.iViewWidget = QtiView()
+            self.iViewWidget.setAttribute(Qt.WA_DeleteOnClose)
+            self.iViewWidget.setWindowModality(Qt.NonModal)
+            self.iViewWidget.btnExit.clicked.connect(self.deleteiViewWidget)
+            self.iViewWidget.closed.connect(self.deleteiViewWidget)
+            self.iViewWidget.show()
+        else:
+            self.deleteiViewWidget()
+
+    @pyqtSlot()
+    def deleteiViewWidget(self):
+        """
+        Closing occurs only when user presses Exit button on tool
+        """
+        self.btniView.setChecked(False)
+        del self.iViewWidget
+        self.iViewWidget = None
 
     # REFACTOR networks should be moved to a new class
     def resetNetworks(self):

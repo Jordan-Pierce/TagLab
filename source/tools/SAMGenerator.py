@@ -408,6 +408,7 @@ class SAMGenerator(Tool):
     def loadNetwork(self):
 
         if self.samgenerator_net is None:
+            QApplication.setOverrideCursor(Qt.WaitCursor)
             self.infoMessage.emit("Loading SAM network..")
 
             # Mapping between the model type, and the checkpoint file name
@@ -440,6 +441,8 @@ class SAMGenerator(Tool):
                                                                   points_per_side=self.num_points,
                                                                   points_per_batch=128)
                 self.device = device
+
+            QApplication.restoreOverrideCursor()
 
     def resetNetwork(self):
         """

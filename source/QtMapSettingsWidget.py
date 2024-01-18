@@ -5,28 +5,30 @@
 # Visual Computing Lab                                           
 # ISTI - Italian National Research Council                              
 # All rights reserved.                                                      
-                                                                          
-# This program is free software; you can redistribute it and/or modify      
-# it under the terms of the GNU General Public License as published by      
-# the Free Software Foundation; either version 2 of the License, or         
-# (at your option) any later version.                                       
-                                                                           
-# This program is distributed in the hope that it will be useful,           
-# but WITHOUT ANY WARRANTY; without even the implied warranty of            
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             
-#GNU General Public License (http://www.gnu.org/licenses/gpl.txt)          
-# for more details.                                               
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License (http://www.gnu.org/licenses/gpl.txt)
+# for more details.
 
 import os
 
 from PyQt5.QtCore import Qt, QSize, pyqtSlot, pyqtSignal
 from PyQt5.QtGui import QImage, QImageReader, QPixmap, QIcon, qRgb, qRed, qGreen, qBlue
-from PyQt5.QtWidgets import QWidget, QMessageBox, QFileDialog, QComboBox, QSizePolicy, QLineEdit, QLabel, QPushButton, QHBoxLayout, QVBoxLayout
+from PyQt5.QtWidgets import QWidget, QMessageBox, QFileDialog, QComboBox, QSizePolicy, QLineEdit, QLabel, QPushButton, \
+    QHBoxLayout, QVBoxLayout
 from source import utils
 
-class QtMapSettingsWidget(QWidget):
 
+class QtMapSettingsWidget(QWidget):
     accepted = pyqtSignal()
+
     def __init__(self, parent=None):
         super(QtMapSettingsWidget, self).__init__(parent)
 
@@ -36,15 +38,17 @@ class QtMapSettingsWidget(QWidget):
         self.setMinimumWidth(300)
         self.setMinimumHeight(100)
 
-
         TEXT_SPACE = 100
 
         self.fields = {
-            "name"            : {"name": "Map Name:"        , "value": "", "place": "Name of the map"        , "width": 300, "action": None },
-            "rgb_filename"    : {"name": "RGB Image:"       , "value": "", "place": "Path of the rgb image"  , "width": 300, "action": self.chooseMapFile },
-            "depth_filename"  : {"name": "Depth Image:"     , "value": "", "place": "Path of the depth image", "width": 300, "action": self.chooseDEMFile },
-            "acquisition_date": {"name": "Acquisition Date:", "value": "", "place": "YYYY-MM-DD"             , "width": 150, "action": None },
-            "px_to_mm"        : {"name": "Pixel size (mm):"        , "value": "", "place": ""                    , "width": 150, "action": None }
+            "name": {"name": "Map Name:", "value": "", "place": "Name of the map", "width": 300, "action": None},
+            "rgb_filename": {"name": "RGB Image:", "value": "", "place": "Path of the rgb image", "width": 300,
+                             "action": self.chooseMapFile},
+            "depth_filename": {"name": "Depth Image:", "value": "", "place": "Path of the depth image", "width": 300,
+                               "action": self.chooseDEMFile},
+            "acquisition_date": {"name": "Acquisition Date:", "value": "", "place": "YYYY-MM-DD", "width": 150,
+                                 "action": None},
+            "px_to_mm": {"name": "Pixel size (mm):", "value": "", "place": "", "width": 150, "action": None}
         }
         self.data = {}
 

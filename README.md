@@ -34,18 +34,19 @@ TagLab allows to :
 
 #### ✨ New Features:
 - 10/2023
-  - install script for Windows using [Anaconda](https://docs.conda.io/projects/miniconda/en/latest/); see Installation instructions below
+  - Install script for Windows using [Anaconda](https://docs.conda.io/projects/miniconda/en/latest/); see Installation instructions below
   - [Segment Anything Model (SAM)](https://github.com/facebookresearch/segment-anything) 
     - [`Predictor` for one-click segmentations](https://www.youtube.com/watch?v=J3_uKzHn9HU)
     - [`Generator` for automatic segmentations]()
-- 11/2023
-  - "Add New Images..." feature; users can bulk import images to annotate in addition to photomosaics
 - 12/2023
   - Width and Height of current view is shown in top-right (updates w/ zoom)
   - Users can mark grid cells as complete from within SAM and pos/neg (RITM) tools
   - Working area for SAM and pos/neg (RITM) tools will show you the dimensions of the working area
+- 01/2024
+  - `iView` using Metashape API to view corresponding images of orthomosaic; requires Professional license
+  - Fixed `Refine` tool
 
-We are working hard to create a web site with detailed instructions about TagLab. Stay tuned(!)
+We are working hard to create a website with detailed instructions about TagLab. Stay tuned(!)
 
 
 ## Software Requirements

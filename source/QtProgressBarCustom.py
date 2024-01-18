@@ -45,7 +45,8 @@ class QtProgressBarCustom(QWidget):
 
     def setMessage(self, text):
         """
-        Update the message displayed by the progress bar. The current progress can be displayed together with the message, or not.
+        Update the message displayed by the progress bar.
+        The current progress can be displayed together with the message, or not.
         """
 
         self.message = text
