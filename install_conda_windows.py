@@ -277,6 +277,39 @@ else:
 
 
 # ----------------------------------------------
+# Metashape Version
+# ----------------------------------------------
+metashape_version = '2.0'
+filename_metashape = 'Metashape-2.0.2-cp37.cp38.cp39.cp310.cp311-none-win_amd64.whl'
+base_url_metashape = base_url + filename_metashape
+
+if not os.path.exists(base_url_metashape):
+    raise Exception(f"Could not find {base_url_metashape}; aborting")
+
+try:
+    metashape_is_installed = importutil.find_spec("Metashape")
+except:
+    metashape_is_installed = None
+
+# if so, check versions
+if metashape_is_installed is not None:
+
+    import Metashape
+
+    found_major_version = ".".join(Metashape.app.version.split('.')[:2])
+    if found_major_version != metashape_version:
+        raise Exception("Incompatible Metashape version: {} != {}".format(found_major_version,
+                                                                          metashape_version))
+    print("Metashape is installed.")
+else:
+    # retrieve rasterio from packages
+    print('GET Metashape FROM URL: ' + base_url_metashape)
+
+    # install rasterio
+    subprocess.check_call([sys.executable, "-m", "pip", "install", base_url_metashape])
+
+
+# ----------------------------------------------
 # Model Weights
 # ----------------------------------------------
 print('Downloading networks...')
