@@ -24,7 +24,7 @@ from PyQt5.QtCore import Qt, QSize, pyqtSlot, pyqtSignal, QPoint
 from PyQt5.QtGui import QImage, QPixmap, QColor, QPainter, QTransform, QFont, QImageReader
 from PyQt5.QtWidgets import QSizePolicy, QLineEdit, QLabel, QPushButton, QHBoxLayout, QVBoxLayout, QTabWidget
 from PyQt5.QtWidgets import QGroupBox, QWidget, QFileDialog, QComboBox, QApplication, QMessageBox, QScrollArea
-from PyQt5.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QGraphicsSceneWheelEvent
+from PyQt5.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QGraphicsSceneWheelEvent, QStackedWidget
 
 from source.QtProgressBarCustom import QtProgressBarCustom
 
@@ -83,19 +83,6 @@ class ThumbnailWidget(QWidget):
         if self.selected != selected:
             # Update the selected state
             self.selected = selected
-            # Update the visual appearance based on the selected state
-            self.updateVisualState()
-            # TODO nothing should happen if re-selected
-
-    def updateVisualState(self):
-        # Reset the style for all thumbnails
-        for widget in self.parent().findChildren(ThumbnailWidget):
-            widget.setStyleSheet("")
-
-        # Modify the visual appearance based on the selected state
-        if self.selected:
-            # Set a border or background color to indicate selection
-            self.setStyleSheet("border: 2px solid red;")
 
 
 def create_thumbnail(file_path):
@@ -130,7 +117,6 @@ class QtiView(QWidget):
         self.metashapeChunks = []
         self.metashapeOrthomosaic = None
         self.metashapeOrthomosaics = []
-        self.closestImage = None
         self.closestImages = []
         self.thumbnailWidgets = {}
 
@@ -156,7 +142,16 @@ class QtiView(QWidget):
 
         self.setStyleSheet("background-color: rgba(60,60,65,100); color: white")
 
-        # Create a tab widget
+        # Create a button to toggle the visibility of the panel
+        self.toggle_button = QPushButton('Toggle Parameters', self)
+        self.toggle_button.clicked.connect(self.togglePanel)
+        button_stylesheet = "QPushButton { background-color: rgb(150, 150, 150); }"
+        self.toggle_button.setStyleSheet(button_stylesheet)
+
+        # Create a stacked widget to manage the visibility of the tabbed panels
+        self.stacked_widget = QStackedWidget(self)
+
+        # Create a tab widget for the tabbed panels
         self.tabWidget = QTabWidget()
         self.tabWidget.setStyleSheet("background-color: rgb(40,40,40); border: 1px solid rgb(90,90,90)")
 
@@ -175,8 +170,8 @@ class QtiView(QWidget):
         layoutLicense = QHBoxLayout()
         layoutLicense.setAlignment(Qt.AlignLeft)
         self.lblLicense = QLabel("License: ")
-        self.lblLicense.setFixedWidth(125)
-        self.lblLicense.setMinimumWidth(125)
+        self.lblLicense.setFixedWidth(130)
+        self.lblLicense.setMinimumWidth(130)
         self.editLicense = QLineEdit("")
         self.editLicense.setEchoMode(QLineEdit.Password)
         self.editLicense.setPlaceholderText("Metashape License")
@@ -193,8 +188,8 @@ class QtiView(QWidget):
         layoutProject = QHBoxLayout()
         layoutProject.setAlignment(Qt.AlignLeft)
         self.lblProject = QLabel("Project: ")
-        self.lblProject.setFixedWidth(125)
-        self.lblProject.setMinimumWidth(125)
+        self.lblProject.setFixedWidth(130)
+        self.lblProject.setMinimumWidth(130)
         self.editProject = QLineEdit("")
         self.editProject.setPlaceholderText("Path to Metashape Project")
         self.editProject.setStyleSheet("background-color: rgb(40,40,40); border: 1px solid rgb(90,90,90)")
@@ -221,11 +216,11 @@ class QtiView(QWidget):
         layoutChunk = QHBoxLayout()
         layoutChunk.setAlignment(Qt.AlignLeft)
         self.lblChunk = QLabel("Chunk: ")
-        self.lblChunk.setFixedWidth(125)
-        self.lblChunk.setMinimumWidth(125)
+        self.lblChunk.setFixedWidth(130)
+        self.lblChunk.setMinimumWidth(130)
         self.comboChunk = QComboBox()
         self.comboChunk.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.comboChunk.setMinimumWidth(200)  # Adjust the minimum width as needed
+        self.comboChunk.setMinimumWidth(200)
         layoutChunk.addWidget(self.lblChunk)
         layoutChunk.addWidget(self.comboChunk)
 
@@ -233,11 +228,11 @@ class QtiView(QWidget):
         layoutOrthomosaic = QHBoxLayout()
         layoutOrthomosaic.setAlignment(Qt.AlignLeft)
         self.lblOrthomosaic = QLabel("Orthomosaic: ")
-        self.lblOrthomosaic.setFixedWidth(125)
-        self.lblOrthomosaic.setMinimumWidth(125)
+        self.lblOrthomosaic.setFixedWidth(130)
+        self.lblOrthomosaic.setMinimumWidth(130)
         self.comboOrthomosaic = QComboBox()
         self.comboOrthomosaic.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.comboOrthomosaic.setMinimumWidth(200)  # Adjust the minimum width as needed
+        self.comboOrthomosaic.setMinimumWidth(200)
         layoutOrthomosaic.addWidget(self.lblOrthomosaic)
         layoutOrthomosaic.addWidget(self.comboOrthomosaic)
 
@@ -267,6 +262,9 @@ class QtiView(QWidget):
         # Add the VISCORE layout to VISCORE Tab
         self.tabWidget.addTab(viscoreTab, "VISCORE")
         self.tabWidget.tabBar().setTabTextColor(1, QColor('black'))
+
+        # Add all tabbed panels to the stacked widget
+        self.stacked_widget.addWidget(self.tabWidget)
 
         # ---------------------
         # iView panel
@@ -298,8 +296,8 @@ class QtiView(QWidget):
         # ------
 
         # Preview image of the current image
-        self.iViewWidth = 1400
-        self.iViewHeight = 800
+        self.iViewWidth = 1600
+        self.iViewHeight = 960
 
         # Create a QGraphicsView and a QGraphicsScene
         self.graphicsView = QGraphicsView(self)
@@ -343,7 +341,7 @@ class QtiView(QWidget):
         self.zoom_factor = 1.0
 
         # Set up the layout
-        layoutClosestPreview = QVBoxLayout()  # Change to QVBoxLayout for vertical arrangement
+        layoutClosestPreview = QVBoxLayout()
         layoutClosestPreview.setAlignment(Qt.AlignCenter)
         layoutClosestPreview.addWidget(self.graphicsView)
 
@@ -371,11 +369,12 @@ class QtiView(QWidget):
         # -----------------------
         layoutV = QVBoxLayout()
 
-        # Metashape and VISCORE Panels
-        layoutV.addWidget(self.tabWidget)
+        # Metashape Pro, Standard, and VISCORE Tabbed panels (inside stacked)
+        layoutV.addWidget(self.toggle_button)
+        layoutV.addWidget(self.stacked_widget)
         layoutV.addSpacing(10)
 
-        # iView Panel (widget)
+        # iView Panel
         layoutV.addWidget(self.iViewPanel)
 
         # Close Panel (button)
@@ -383,6 +382,11 @@ class QtiView(QWidget):
         layoutV.setSpacing(3)
 
         self.setLayout(layoutV)
+
+    def togglePanel(self):
+        # Toggle the visibility of the stacked widget
+        self.stacked_widget.setVisible(not self.stacked_widget.isVisible())
+
 
     @pyqtSlot()
     def getMetashapeLicense(self):
