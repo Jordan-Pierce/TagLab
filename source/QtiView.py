@@ -21,14 +21,14 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 
 from PyQt5.QtCore import Qt, QSize, pyqtSlot, pyqtSignal, QPoint
-from PyQt5.QtGui import QImage, QPixmap, QColor, QPainter, QTransform, QFont, QImageReader
-from PyQt5.QtWidgets import QSizePolicy, QLineEdit, QLabel, QPushButton, QHBoxLayout, QVBoxLayout, QTabWidget
-from PyQt5.QtWidgets import QGroupBox, QWidget, QFileDialog, QComboBox, QApplication, QMessageBox, QScrollArea
-from PyQt5.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QGraphicsSceneWheelEvent, QStackedWidget
+from PyQt5.QtGui import QImage, QPixmap, QTransform, QFont, QImageReader, QPainter, QColor
+from PyQt5.QtWidgets import QStackedWidget, QTabWidget, QScrollArea
+from PyQt5.QtWidgets import QSizePolicy, QLineEdit, QLabel, QPushButton, QHBoxLayout, QVBoxLayout
+from PyQt5.QtWidgets import QGroupBox, QWidget, QFileDialog, QComboBox, QApplication, QMessageBox
+from PyQt5.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QGraphicsSceneWheelEvent
 
 from source.QtProgressBarCustom import QtProgressBarCustom
 
-import cv2
 import numpy as np
 import Metashape
 
@@ -687,6 +687,7 @@ class QtiView(QWidget):
 
         if len(positions):
 
+            # Number of thumbnails shown
             N = 15
 
             # Sort and subset the cameras so that those that are closest are first
@@ -713,18 +714,34 @@ class QtiView(QWidget):
             # Update closest_images based on the sorted indices
             closest_images = closest_images[sorted_indices]
 
-            closest_images_paths = []
+            # Update the self variable to contain what's needed for
+            # viewing in iView (path, u, v, rotation)
+            self.closestImages = []
 
             for closest_image in closest_images:
+                # Path to the image
                 path = closest_image[0].photo.path
-                closest_images_paths.append(path)
+                # Coordinates of the point on image
+                u_coord = closest_image[1]
+                v_coord = closest_image[2]
+                # Rotation angle of image
+                transform_matrix = closest_image[0].transform
+                rotation_angle = np.arctan2(transform_matrix[1, 0], transform_matrix[0, 0])
+                # Convert the angle from radians to degrees
+                rotation = np.degrees(rotation_angle)
+                self.closestImages.append([path, u_coord, v_coord, rotation])
 
-            # Update the thumbnails and the viewer
-            self.updateiView(closest_images_paths)
+            # Convert to array for transposing
+            self.closestImages = np.array(self.closestImages)
+            # Update the thumbnails
+            self.updateThumbnails(self.closestImages.T[0])
+            # Update the viewer to the closest image
+            path, u, v, rotation = self.closestImages[0].tolist()
+            self.setiViewPreview(path, u, v, rotation)
 
         QApplication.restoreOverrideCursor()
 
-    def updateiView(self, closest_images_paths):
+    def updateThumbnails(self, closest_images_paths):
         """
         Removes previous thumbnails within container and populates with new thumbnails;
         updates the viewer and thumbnail selected for current closest image.
@@ -747,7 +764,6 @@ class QtiView(QWidget):
 
         # Highlight and display the first image
         self.thumbnail_container_layout.itemAt(0).widget().setSelected(True)
-        self.setiViewPreview(closest_images_paths[0])
 
     @pyqtSlot(str)
     def handleThumbnailClick(self, selected_image_path):
@@ -755,11 +771,13 @@ class QtiView(QWidget):
         Catches the signal emitted by the ThumbNailWidget mouse event function
         """
         # Update the current image in the scene based on the selected thumbnail
-        self.setiViewPreview(selected_image_path)
+        index = np.where(self.closestImages.T[0] == selected_image_path)[0][0]
+        path, u, v, rotation = self.closestImages[index].tolist()
+        self.setiViewPreview(path, u, v, rotation)
 
-    def setiViewPreview(self, file_path):
+    def setiViewPreview(self, file_path, u, v, rotation):
         """
-        Takes in the path of the image, opens with cv2, converts to qimage, displays
+        Takes in the path of the image, converts to qimage, displays
         """
 
         # Reset the Zoom and Rotation
@@ -775,15 +793,36 @@ class QtiView(QWidget):
 
         # Reads the image path, converts to RGB
         image_reader = QImageReader(file_path)
-        image_reader.setAutoTransform(True)
-
-        # Read the image using QImage
         image = image_reader.read()
+
+        # Fill an N x N region centered on u, v coordinates with red pixels
+        N = 25
+        self.fillRegionWithRed(image, float(u), float(v), N)
+
+        transform = QTransform().rotate(float(rotation))
+        image = image.transformed(transform)
 
         # Display the image using a QPixmap
         new_pixmap = QPixmap.fromImage(image)
         self.pixmap_item.setPixmap(new_pixmap.scaled(QSize(self.iViewWidth, self.iViewHeight), Qt.KeepAspectRatio))
         self.scene.setSceneRect(self.scene.itemsBoundingRect())
+
+    def fillRegionWithRed(self, image, u, v, N):
+        """
+
+        """
+        width, height = image.width(), image.height()
+
+        # Calculate the region boundaries
+        x_start = max(0, int(u - N / 2))
+        y_start = max(0, int(v - N / 2))
+        x_end = min(width, int(u + N / 2))
+        y_end = min(height, int(v + N / 2))
+
+        # Iterate through the specified region and set pixels to red
+        for x in range(x_start, x_end):
+            for y in range(y_start, y_end):
+                image.setPixelColor(x, y, QColor(Qt.red))
 
     def zoom_wheel_event(self, event: QGraphicsSceneWheelEvent):
         """
