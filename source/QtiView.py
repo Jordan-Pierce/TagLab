@@ -18,15 +18,18 @@
 # for more details.                                               
 
 import os
+from concurrent.futures import ThreadPoolExecutor
 
-from PyQt5.QtCore import Qt, QSize, pyqtSlot, pyqtSignal
-from PyQt5.QtGui import QImage, QPixmap, QColor, QPalette
+from PyQt5.QtCore import Qt, QSize, pyqtSlot, pyqtSignal, QPoint
+from PyQt5.QtGui import QImage, QPixmap, QColor, QPainter, QTransform, QFont, QImageReader
 from PyQt5.QtWidgets import QSizePolicy, QLineEdit, QLabel, QPushButton, QHBoxLayout, QVBoxLayout, QTabWidget
-from PyQt5.QtWidgets import QGroupBox, QWidget, QFileDialog, QComboBox, QApplication, QMessageBox
+from PyQt5.QtWidgets import QGroupBox, QWidget, QFileDialog, QComboBox, QApplication, QMessageBox, QScrollArea
+from PyQt5.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QGraphicsSceneWheelEvent
+
+from source.QtProgressBarCustom import QtProgressBarCustom
 
 import cv2
 import numpy as np
-
 import Metashape
 
 # Check that the Metashape version is compatible with this script
@@ -37,7 +40,84 @@ if found_major_version != compatible_major_version:
                                                                       compatible_major_version))
 
 
+class ThumbnailWidget(QWidget):
+    clicked = pyqtSignal(str)
+
+    def __init__(self, file_path, thumbnail):
+        super(ThumbnailWidget, self).__init__()
+
+        # Get the basename of the file
+        self.file_path = file_path
+        self.basename = os.path.basename(file_path)
+
+        # Create a QLabel to display the thumbnail
+        self.thumbnail_label = QLabel(self)
+        self.thumbnail_label.setPixmap(thumbnail)
+
+        # Create a QLabel to display the basename
+        self.basename_label = QLabel(self.basename, self)
+        font = QFont()
+        font.setPointSize(6)
+        self.basename_label.setFont(font)
+        self.basename_label.setAlignment(Qt.AlignCenter)
+
+        # Set up the layout
+        layout = QVBoxLayout()
+        layout.addWidget(self.thumbnail_label)
+        layout.addWidget(self.basename_label)
+        self.setLayout(layout)
+
+        # For the red highlight indicating selection
+        # Initialize the selected state to False
+        self.selected = False
+
+    def mousePressEvent(self, event):
+        # Emit the clicked signal with the file_path when the widget is clicked
+        self.clicked.emit(self.file_path)
+        # Update the visual state based on the selected state
+        self.setSelected(not self.selected)
+        super().mousePressEvent(event)
+
+    def setSelected(self, selected):
+        # Only update the visual state if the selection status is changing
+        if self.selected != selected:
+            # Update the selected state
+            self.selected = selected
+            # Update the visual appearance based on the selected state
+            self.updateVisualState()
+            # TODO nothing should happen if re-selected
+
+    def updateVisualState(self):
+        # Reset the style for all thumbnails
+        for widget in self.parent().findChildren(ThumbnailWidget):
+            widget.setStyleSheet("")
+
+        # Modify the visual appearance based on the selected state
+        if self.selected:
+            # Set a border or background color to indicate selection
+            self.setStyleSheet("border: 2px solid red;")
+
+
+def create_thumbnail(file_path):
+    """
+    Used for parallelism, much faster.
+    """
+    # Reads the image path, converts to RGB
+    image_reader = QImageReader(file_path)
+    image_reader.setAutoTransform(True)
+
+    # Read the image using QImage
+    image = image_reader.read()
+
+    # Display the image using a QPixmap
+    pixmap = QPixmap.fromImage(image)
+    thumbnail = pixmap.scaled(90, 60, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+
+    return file_path, thumbnail
+
+
 class QtiView(QWidget):
+
     closed = pyqtSignal()
 
     def __init__(self, parent=None):
@@ -52,6 +132,7 @@ class QtiView(QWidget):
         self.metashapeOrthomosaics = []
         self.closestImage = None
         self.closestImages = []
+        self.thumbnailWidgets = {}
 
         # --------------------
         # The window settings
@@ -190,43 +271,85 @@ class QtiView(QWidget):
         # ---------------------
         # iView panel
         # ---------------------
-        layoutiView = QVBoxLayout()
+        layoutiView = QHBoxLayout()
 
-        # Combobox for closest images
-        layoutClosestCombo = QHBoxLayout()
+        # ----------
+        # Thumbnails
+        # ----------
 
-        self.lblClosestImages = QLabel("Current Image: ")
-        self.comboClosestImages = QComboBox()
-        self.comboClosestImages.setMinimumWidth(300)
+        # Create a QWidget to contain the thumbnails
+        self.thumbnail_container = QWidget()
+        self.thumbnail_container_layout = QVBoxLayout()
 
-        for closestImage in self.closestImages:
-            self.comboClosestImages.addItem(closestImage)
+        # Set the widget to the scroll area
+        self.scrollArea = QScrollArea()
+        self.scrollArea.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        self.scrollArea.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scrollArea.setFixedWidth(150)
 
-        self.comboClosestImages.currentIndexChanged.connect(self.closestImageChanged)
+        self.scrollArea.setWidgetResizable(True)
+        self.scrollArea.setWidget(self.thumbnail_container)
 
-        layoutClosestCombo.setAlignment(Qt.AlignRight)
-        layoutClosestCombo.addWidget(self.lblClosestImages)
-        layoutClosestCombo.addWidget(self.comboClosestImages)
+        # Set the vertical scrollbar to the far-right
+        self.scrollArea.verticalScrollBar().setValue(self.scrollArea.verticalScrollBar().maximum())
 
-        # Preview image of current image
-        self.iViewWidth = 1200
-        self.iViewHeight = 675
-        self.QlabelRGB = QLabel("")
-        self.QPixmapRGB = QPixmap(self.iViewWidth, self.iViewHeight)
-        self.QPixmapRGB.fill(Qt.black)
-        self.QlabelRGB.setPixmap(self.QPixmapRGB)
+        # ------
+        # Scene
+        # ------
 
-        # Set maximum size for the QLabel containing the image
-        self.QlabelRGB.setMaximumSize(self.iViewWidth, self.iViewHeight)
-        self.QlabelRGB.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        # Preview image of the current image
+        self.iViewWidth = 1400
+        self.iViewHeight = 800
 
-        layoutClosestPreview = QHBoxLayout()
+        # Create a QGraphicsView and a QGraphicsScene
+        self.graphicsView = QGraphicsView(self)
+        self.scene = QGraphicsScene(self)
+
+        # Create a blank image (black)
+        blank_image = QImage(self.iViewWidth, self.iViewHeight, QImage.Format_RGB32)
+        blank_image.fill(Qt.black)
+        pixmap = QPixmap.fromImage(blank_image)
+        # Add the image to the scene
+        self.pixmap_item = QGraphicsPixmapItem(pixmap)
+        self.scene.addItem(self.pixmap_item)
+        self.graphicsView.setScene(self.scene)
+
+        # ------------
+        # Interactions
+        # ------------
+
+        # Enable zooming with the mouse wheel
+        self.graphicsView.setRenderHint(QPainter.Antialiasing, False)
+        self.graphicsView.setRenderHint(QPainter.SmoothPixmapTransform, True)
+        self.graphicsView.setMouseTracking(True)
+        self.graphicsView.wheelEvent = self.zoom_wheel_event
+
+        # Enable panning and rotation with mouse press, move, and release events
+        self.pan_active = False
+        self.pan_start = QPoint()
+
+        self.rotation_active = False
+        self.rotation_start = QPoint()
+        self.rotation_angle = 0.0
+
+        self.graphicsView.mousePressEvent = self.mouse_press_event
+        self.graphicsView.mouseMoveEvent = self.mouse_move_event
+        self.graphicsView.mouseReleaseEvent = self.mouse_release_event
+
+        # Store the original center point for rotation
+        self.original_center = QPoint(self.iViewWidth / 2, self.iViewHeight / 2)
+
+        # Initial zoom factor
+        self.zoom_factor = 1.0
+
+        # Set up the layout
+        layoutClosestPreview = QVBoxLayout()  # Change to QVBoxLayout for vertical arrangement
         layoutClosestPreview.setAlignment(Qt.AlignCenter)
-        layoutClosestPreview.addWidget(self.QlabelRGB)
+        layoutClosestPreview.addWidget(self.graphicsView)
 
-        # Add the combobox and preview to iView layout
-        layoutiView.addLayout(layoutClosestCombo)
+        # Add the layout of thumbnails and scene to the iView layout
         layoutiView.addLayout(layoutClosestPreview)
+        layoutiView.addWidget(self.scrollArea)
 
         # Grouping the combobox and tile
         self.iViewPanel = QGroupBox("Closest Images")
@@ -388,6 +511,37 @@ class QtiView(QWidget):
             msgBox.exec()
             return
 
+        try:
+            # Orthomosaic has been opened, get the image paths for thumbnails
+            file_paths = []
+
+            for camera in self.metashapeChunk.cameras:
+
+                try:
+                    file_path = camera.photo.path
+                    if os.path.exists(file_path):
+                        file_paths.append(file_path)
+
+                except:
+                    # camera is None
+                    pass
+
+            if len(file_paths) == 0:
+                QApplication.restoreOverrideCursor()
+                msgBox.setText("No valid image paths found in Chunk")
+                msgBox.exec()
+                return
+
+            # Will show progress bar
+            self.preloadThumbnails(file_paths)
+
+        except Exception as e:
+            # Show a bad box
+            QApplication.restoreOverrideCursor()
+            msgBox.setText("Failed to load thumbnails!")
+            msgBox.exec()
+            return
+
         QApplication.restoreOverrideCursor()
 
     @pyqtSlot(int)
@@ -405,6 +559,41 @@ class QtiView(QWidget):
         """
         if len(self.metashapeOrthomosaics) != 0:
             self.metashapeOrthomosaic = self.metashapeOrthomosaics[index]
+
+    def preloadThumbnails(self, file_paths):
+        """
+        Creates all thumbnail widgets for all file paths provided;
+        done at the beginning of the process to save time later.
+        Shows progress bar.
+        """
+
+        progress_bar = QtProgressBarCustom()
+        progress_bar.setWindowFlags(Qt.ToolTip | Qt.CustomizeWindowHint)
+        progress_bar.setWindowModality(Qt.NonModal)
+        progress_bar.show()
+
+        progress_bar.setMessage("Creating thumbnails...")
+
+        with ThreadPoolExecutor() as executor:
+            futures = []
+            for f_idx, file_path in enumerate(file_paths):
+                futures.append(executor.submit(create_thumbnail, file_path))
+                progress_bar.setProgress(float(f_idx / len(file_paths) * 100.0))
+                QApplication.processEvents()
+
+        progress_bar.setMessage("Loading thumbnails...")
+
+        for f_idx, future in enumerate(futures):
+            file_path, thumbnail = future.result()
+            thumbnail_widget = ThumbnailWidget(file_path, thumbnail)
+            thumbnail_widget.clicked.connect(self.handleThumbnailClick)
+            self.thumbnailWidgets[os.path.basename(file_path)] = thumbnail_widget
+            progress_bar.setProgress(float(f_idx / len(futures) * 100.0))
+            QApplication.processEvents()
+
+        progress_bar.close()
+        del progress_bar
+        progress_bar = None
 
     def distance(self, point1, point2):
         """
@@ -451,6 +640,7 @@ class QtiView(QWidget):
 
         if self.metashapeChunk.elevation:
             # Using the DEM as a surface
+            # TODO Use the DEM from viewerplus instead?
             dem = self.metashapeChunk.elevation
             # Altitude in dem.crs (supposing dem.crs  = ortho.crs)
             Z = dem.altitude(Metashape.Vector((X, Y)))
@@ -493,7 +683,8 @@ class QtiView(QWidget):
 
         if len(positions):
 
-            N = 100
+            N = 15
+
             # Sort and subset the cameras so that those that are closest are first
             closest_images = positions[np.argsort(positions[:, 3])][0:N]
 
@@ -518,88 +709,151 @@ class QtiView(QWidget):
             # Update closest_images based on the sorted indices
             closest_images = closest_images[sorted_indices]
 
-            # Update the image combobox
-            self.closestImagesChanged(closest_images)
+            closest_images_paths = []
+
+            for closest_image in closest_images:
+                path = closest_image[0].photo.path
+                closest_images_paths.append(path)
+
+            # Update the thumbnails and the viewer
+            self.updateiView(closest_images_paths)
 
         QApplication.restoreOverrideCursor()
 
-    def closestImagesChanged(self, closest_images):
+    def updateiView(self, closest_images_paths):
         """
-        Update the images combobox
-        """
-
-        # Set the new closest image(s)
-        self.closestImages = closest_images
-
-        # Remove items from comboClosestImages
-        self.comboClosestImages.clear()
-
-        # Add each image name to the combobox
-        for image in self.closestImages:
-            self.comboClosestImages.addItem(str(image[0].label))
-
-    @pyqtSlot(int)
-    def closestImageChanged(self, index):
+        Removes previous thumbnails within container and populates with new thumbnails;
+        updates the viewer and thumbnail selected for current closest image.
         """
 
+        # First clear existing thumbnails
+        for i in reversed(range(self.thumbnail_container_layout.count())):
+            widgetToRemove = self.thumbnail_container_layout.itemAt(i).widget()
+            self.thumbnail_container_layout.removeWidget(widgetToRemove)
+            widgetToRemove.setParent(None)
+
+        # Then add new thumbnails
+        for file_path in closest_images_paths:
+            # Get a thumbnail widget given the file path
+            thumbnail_widget = self.thumbnailWidgets[os.path.basename(file_path)]
+            self.thumbnail_container_layout.addWidget(thumbnail_widget)
+
+        # Set the container layout
+        self.thumbnail_container.setLayout(self.thumbnail_container_layout)
+
+        # Highlight and display the first image
+        self.thumbnail_container_layout.itemAt(0).widget().setSelected(True)
+        self.setiViewPreview(closest_images_paths[0])
+
+    @pyqtSlot(str)
+    def handleThumbnailClick(self, selected_image_path):
         """
-        self.comboClosestImages.setFocus()
+        Catches the signal emitted by the ThumbNailWidget mouse event function
+        """
+        # Update the current image in the scene based on the selected thumbnail
+        self.setiViewPreview(selected_image_path)
 
-        if 0 <= index < len(self.closestImages):
-            self.closestImage = self.closestImages[index]
-            self.setiViewPreview(self.closestImage)
-
-    def setiViewPreview(self, item):
+    def setiViewPreview(self, file_path):
         """
         Takes in the path of the image, opens with cv2, converts to qimage, displays
         """
 
-        path = item[0].photo.path
+        # Reset the Zoom and Rotation
+        self.zoom_factor = 1.0
+        self.rotation_angle = 0.0
 
-        if not os.path.exists(path):
+        if not os.path.exists(file_path):
             QApplication.restoreOverrideCursor()
             msgBox = QMessageBox()
-            msgBox.setText(f"Image path not found: {path}")
+            msgBox.setText(f"Image path not found: {file_path}")
             msgBox.exec()
             return
 
-        image = cv2.imread(path)
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        # Reads the image path, converts to RGB
+        image_reader = QImageReader(file_path)
+        image_reader.setAutoTransform(True)
 
-        # Pixel that corresponds to user's mouse, in image
-        x, y = int(item[1]), int(item[2])
+        # Read the image using QImage
+        image = image_reader.read()
 
-        # Define the size of the area to be modified
-        area_size = 15
+        # Display the image using a QPixmap
+        new_pixmap = QPixmap.fromImage(image)
+        self.pixmap_item.setPixmap(new_pixmap.scaled(QSize(self.iViewWidth, self.iViewHeight), Qt.KeepAspectRatio))
+        self.scene.setSceneRect(self.scene.itemsBoundingRect())
 
-        # Set the specified region to red
-        image[y - area_size: y + area_size, x - area_size: x + area_size, :] = [255, 0, 0]
-
-        height, width, channel = image.shape
-        bytes_per_line = 3 * width  # Assuming 3 channels (RGB)
-
-        # Create QImage from the NumPy array data
-        qimage = QImage(image.data, width, height, bytes_per_line, QImage.Format_RGB888)
-
-        self.QPixmapRGB = QPixmap.fromImage(qimage)
-        self.QlabelRGB.setPixmap(self.QPixmapRGB.scaled(QSize(self.iViewWidth, self.iViewHeight), Qt.KeepAspectRatio))
-
-    def keyPressEvent(self, event):
+    def zoom_wheel_event(self, event: QGraphicsSceneWheelEvent):
         """
 
         """
-        self.comboClosestImages.setFocus()
-
-        if event.key() == Qt.Key_Left:
-            # Handle left arrow key
-            if self.comboClosestImages.currentIndex() > 0:
-                self.comboClosestImages.setCurrentIndex(self.comboClosestImages.currentIndex() - 1)
-        elif event.key() == Qt.Key_Right:
-            # Handle right arrow key
-            if self.comboClosestImages.currentIndex() < self.comboClosestImages.count() - 1:
-                self.comboClosestImages.setCurrentIndex(self.comboClosestImages.currentIndex() + 1)
+        # Zoom in or out based on the direction of the wheel
+        if event.angleDelta().y() > 0:
+            self.zoom_factor *= 1.1  # Zoom in
         else:
-            super().keyPressEvent(event)
+            self.zoom_factor /= 1.1  # Zoom out
+
+        # Set the new zoom level
+        transform = QTransform()
+        transform.scale(self.zoom_factor, self.zoom_factor)
+
+        # Apply the rotation to the transform
+        transform.rotate(self.rotation_angle)
+
+        self.graphicsView.setTransform(transform)
+
+    def mouse_press_event(self, event):
+        """
+
+        """
+        if event.button() == Qt.LeftButton:
+            # Start panning if left mouse button is pressed
+            self.pan_active = True
+            self.pan_start = event.pos()
+        elif event.button() == Qt.RightButton:
+            # Start rotation if right mouse button is pressed
+            self.rotation_active = True
+            self.rotation_start = event.pos()
+
+    def mouse_move_event(self, event):
+        """
+
+        """
+        if self.pan_active:
+            # If panning is active, calculate the difference in mouse position and pan accordingly
+            delta = event.pos() - self.pan_start
+            self.pan_start = event.pos()
+
+            # Pan the scene by adjusting the view's scroll bars
+            hor_scroll = self.graphicsView.horizontalScrollBar().value() - delta.x()
+            ver_scroll = self.graphicsView.verticalScrollBar().value() - delta.y()
+            self.graphicsView.horizontalScrollBar().setValue(hor_scroll)
+            self.graphicsView.verticalScrollBar().setValue(ver_scroll)
+
+        elif self.rotation_active:
+            # If rotation is active, calculate the angle based on the horizontal movement of the mouse
+            delta = event.pos() - self.rotation_start
+            self.rotation_angle += delta.x()
+
+            # Set the new rotation angle
+            transform = QTransform()
+            transform.translate(self.original_center.x(), self.original_center.y())
+            transform.rotate(self.rotation_angle)
+            transform.translate(-self.original_center.x(), -self.original_center.y())
+
+            # Apply the rotation to the transform
+            self.graphicsView.setTransform(transform)
+
+            self.rotation_start = event.pos()
+
+    def mouse_release_event(self, event):
+        """
+
+        """
+        if event.button() == Qt.LeftButton:
+            # Stop panning on left mouse button release
+            self.pan_active = False
+        elif event.button() == Qt.RightButton:
+            # Stop rotation on right mouse button release
+            self.rotation_active = False
 
     def closeEvent(self, event):
         self.closed.emit()
