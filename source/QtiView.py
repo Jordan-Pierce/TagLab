@@ -296,8 +296,8 @@ class QtiView(QWidget):
         # ------
 
         # Preview image of the current image
-        self.iViewWidth = 1600
-        self.iViewHeight = 960
+        self.iViewWidth = 3000
+        self.iViewHeight = 1980
 
         # Create a QGraphicsView and a QGraphicsScene
         self.graphicsView = QGraphicsView(self)
@@ -416,6 +416,9 @@ class QtiView(QWidget):
         """
         QApplication.setOverrideCursor(Qt.WaitCursor)
 
+        # Reset iView in case the user is loading another project
+        self.resetiView()
+
         # Good or Bad box
         msgBox = QMessageBox()
 
@@ -425,7 +428,7 @@ class QtiView(QWidget):
 
             assert metashape_license != ""
 
-            # Set the metashape license
+            # Set the metashape license as environmental variable
             Metashape.License().activate(metashape_license)
             os.environ['METASHAPE_LICENSE'] = metashape_license
             self.metashapeLicense = True
@@ -460,117 +463,146 @@ class QtiView(QWidget):
             return
 
         try:
-            # Project has been opened, get the chunks
-            self.metashapeChunks = self.metashapeProject.chunks
-
-            if len(self.metashapeChunks) == 0:
-                QApplication.restoreOverrideCursor()
-                msgBox.setText("No Chunks found in Project")
-                msgBox.exec()
-                return
-
-            # Remove items from comboChunk (in case of project change)
-            self.comboChunk.clear()
-
-            # Add each chunk name to the combobox
-            for chunk in self.metashapeChunks:
-                self.comboChunk.addItem(chunk.label)
-
-            # Set the chunk to first as default, allow updates
-            self.metashapeChunk = self.metashapeChunks[0]
-            self.comboChunk.currentIndexChanged.connect(self.metashapeChunksChanged)
+            # Project has been opened, load the chunks
+            self.loadChunkComboBox()
 
         except Exception as e:
             # Show a bad box
             QApplication.restoreOverrideCursor()
-            msgBox.setText("Failed to load Chunks!")
+            msgBox.setText(f"{e}")
             msgBox.exec()
             return
 
         try:
-            # Chunk has been opened, get the orthomosaics
-            self.metashapeOrthomosaics = self.metashapeChunk.orthomosaics
-
-            if len(self.metashapeOrthomosaics) == 0:
-                QApplication.restoreOverrideCursor()
-                msgBox.setText("No Orthomosaics found in Chunk")
-                msgBox.exec()
-                return
-
-            # Remove items from comboOrthomosaic (in case of project change)
-            self.comboOrthomosaic.clear()
-
-            # Add each orthomosaic name to the combobox
-            for orthomosaic in self.metashapeOrthomosaics:
-                self.comboOrthomosaic.addItem(str(orthomosaic))
-
-            # Set the orthomosaic to first as default, allow updates
-            self.metashapeOrthomosaic = self.metashapeOrthomosaics[0]
-            self.comboOrthomosaic.currentIndexChanged.connect(self.metashapeOrthomosaicsChanged)
+            # Chunk has been opened, load the orthomosaic
+            self.loadOrthomosaicComboBox()
 
         except Exception as e:
             # Show a bad box
             QApplication.restoreOverrideCursor()
-            msgBox.setText("Failed to load Chunks!")
+            msgBox.setText(f"{e}")
             msgBox.exec()
             return
 
         try:
-            # Orthomosaic has been opened, get the image paths for thumbnails
-            file_paths = []
-
-            for camera in self.metashapeChunk.cameras:
-
-                try:
-                    file_path = camera.photo.path
-                    if os.path.exists(file_path):
-                        file_paths.append(file_path)
-
-                except:
-                    # camera is None
-                    pass
-
-            if len(file_paths) == 0:
-                QApplication.restoreOverrideCursor()
-                msgBox.setText("No valid image paths found in Chunk")
-                msgBox.exec()
-                return
-
-            # Will show progress bar
-            self.preloadThumbnails(file_paths)
+            # Chunk has been opened, load the thumbnails
+            self.loadThumbnails()
 
         except Exception as e:
             # Show a bad box
             QApplication.restoreOverrideCursor()
-            msgBox.setText("Failed to load thumbnails!")
+            msgBox.setText(f"{e}")
             msgBox.exec()
             return
 
         QApplication.restoreOverrideCursor()
 
+    def loadChunkComboBox(self):
+        """
+        This only runs when a project is loaded (button pressed)
+        """
+
+        # Stores the chunks in global variable
+        self.metashapeChunks = self.metashapeProject.chunks
+
+        if len(self.metashapeChunks) == 0:
+            raise Exception("No Chunks found in Project")
+
+        # Remove items from existing comboChunk
+        self.comboChunk.clear()
+
+        # Add each chunk name to the combobox
+        for chunk in self.metashapeChunks:
+            self.comboChunk.addItem(chunk.label)
+
+        # Set the chunk to first as default, allow updates
+        self.metashapeChunk = self.metashapeChunks[0]
+        self.comboChunk.currentIndexChanged.connect(self.metashapeChunkChanged)
+
     @pyqtSlot(int)
-    def metashapeChunksChanged(self, index):
+    def metashapeChunkChanged(self, index):
         """
+        This runs everytime the selection in the combobox changes
+        """
+        # Reset iView as the user is loading another chunk
+        self.resetiView()
 
+        try:
+            # Updates the combobox selection
+            if len(self.metashapeChunks) != 0:
+                # Updates the global variable
+                self.metashapeChunk = self.metashapeChunks[index]
+                # Updates what is seen in combobox
+                self.loadOrthomosaicComboBox()
+                # Updates thumbnails based on images in new chunk
+                self.loadThumbnails()
+
+        except Exception as e:
+            # Show a bad box
+            msgBox = QMessageBox()
+            QApplication.restoreOverrideCursor()
+            msgBox.setText(f"{e}")
+            msgBox.exec()
+            return
+
+    def loadOrthomosaicComboBox(self):
         """
-        if len(self.metashapeChunks) != 0:
-            self.metashapeChunk = self.metashapeChunks[index]
+        This only runs when a project is loaded (button pressed), or when the user
+        selects a new orthomosaic within the combobox.
+        """
+        # Stores the orthomosaics in global variable
+        self.metashapeOrthomosaics = self.metashapeChunk.orthomosaics
+
+        if len(self.metashapeOrthomosaics) == 0:
+            raise Exception("No Orthomosaics found in Chunk")
+
+        # Remove items from existing comboChunk
+        self.comboOrthomosaic.clear()
+
+        # Add each orthomosaic name to the combobox
+        for orthomosaic in self.metashapeOrthomosaics:
+            self.comboOrthomosaic.addItem(str(orthomosaic))
+
+        # Set the orthomosaic to first as default, allow updates
+        self.metashapeOrthomosaic = self.metashapeOrthomosaics[0]
+        self.comboOrthomosaic.currentIndexChanged.connect(self.metashapeOrthomosaicChanged)
 
     @pyqtSlot(int)
-    def metashapeOrthomosaicsChanged(self, index):
+    def metashapeOrthomosaicChanged(self, index):
+        """
+        This only runs when a project is loaded (button pressed), or when the user
+        selects a new orthomosaic within the combobox.
         """
 
-        """
+        # Updates the combobox selection
         if len(self.metashapeOrthomosaics) != 0:
+            # Updates the global variable
             self.metashapeOrthomosaic = self.metashapeOrthomosaics[index]
 
-    def preloadThumbnails(self, file_paths):
+    def loadThumbnails(self):
         """
-        Creates all thumbnail widgets for all file paths provided;
-        done at the beginning of the process to save time later.
-        Shows progress bar.
+        This only runs when a project is loaded (button pressed), or when the user
+        selects a new chunk within the combobox.
         """
 
+        # A Chunk has been initially loaded or changed
+        file_paths = []
+
+        for camera in self.metashapeChunk.cameras:
+
+            try:
+                file_path = camera.photo.path
+                if os.path.exists(file_path):
+                    file_paths.append(file_path)
+
+            except:
+                # camera is None
+                pass
+
+        if len(file_paths) == 0:
+            raise Exception("No valid image paths found in Chunk")
+
+        # Show progress bar
         progress_bar = QtProgressBarCustom()
         progress_bar.setWindowFlags(Qt.ToolTip | Qt.CustomizeWindowHint)
         progress_bar.setWindowModality(Qt.NonModal)
@@ -587,6 +619,9 @@ class QtiView(QWidget):
 
         progress_bar.setMessage("Loading thumbnails...")
 
+        # Reset
+        self.thumbnailWidgets = {}
+
         for f_idx, future in enumerate(futures):
             file_path, thumbnail = future.result()
             thumbnail_widget = ThumbnailWidget(file_path, thumbnail)
@@ -601,7 +636,7 @@ class QtiView(QWidget):
 
     def distance(self, point1, point2):
         """
-
+        Helper function to find distance between two points.
         """
         # Convert points to NumPy arrays for easy computation
         point1 = np.array(point1)
@@ -615,12 +650,13 @@ class QtiView(QWidget):
     @pyqtSlot()
     def findClosestImage(self, x, y, width, height):
         """
-
+        Metashape API Version for finding the closest images
         """
         QApplication.setOverrideCursor(Qt.WaitCursor)
 
         positions = []
 
+        # The current Metashape chunk and orthomosaic
         T = self.metashapeChunk.transform.matrix
         orthomosaic = self.metashapeOrthomosaic
 
@@ -644,7 +680,7 @@ class QtiView(QWidget):
 
         if self.metashapeChunk.elevation:
             # Using the DEM as a surface
-            # TODO Use the DEM from viewerplus instead?
+            # TODO Use the DEM (and Ortho) from viewerplus instead?
             dem = self.metashapeChunk.elevation
             # Altitude in dem.crs (supposing dem.crs  = ortho.crs)
             Z = dem.altitude(Metashape.Vector((X, Y)))
@@ -729,6 +765,9 @@ class QtiView(QWidget):
                 rotation_angle = np.arctan2(transform_matrix[1, 0], transform_matrix[0, 0])
                 # Convert the angle from radians to degrees
                 rotation = np.degrees(rotation_angle)
+                # QT Transform rotates counterclockwise with negative values
+                rotation = -rotation if rotation > 0 else rotation
+
                 self.closestImages.append([path, u_coord, v_coord, rotation])
 
             # Convert to array for transposing
@@ -736,8 +775,7 @@ class QtiView(QWidget):
             # Update the thumbnails
             self.updateThumbnails(self.closestImages.T[0])
             # Update the viewer to the closest image
-            path, u, v, rotation = self.closestImages[0].tolist()
-            self.setiViewPreview(path, u, v, rotation)
+            self.handleThumbnailClick(self.closestImages[0][0])
 
         QApplication.restoreOverrideCursor()
 
@@ -775,7 +813,7 @@ class QtiView(QWidget):
         path, u, v, rotation = self.closestImages[index].tolist()
         self.setiViewPreview(path, u, v, rotation)
 
-    def setiViewPreview(self, file_path, u, v, rotation):
+    def setiViewPreview(self, file_path, u=None, v=None, rotation=None):
         """
         Takes in the path of the image, converts to qimage, displays
         """
@@ -795,23 +833,28 @@ class QtiView(QWidget):
         image_reader = QImageReader(file_path)
         image = image_reader.read()
 
-        # Fill an N x N region centered on u, v coordinates with red pixels
-        N = 25
-        self.fillRegionWithRed(image, float(u), float(v), N)
+        if not None in [u, v]:
+            # Add a red dot on the image if coordinates are provided
+            self.addRedDot(image, float(u), float(v))
 
-        transform = QTransform().rotate(float(rotation))
-        image = image.transformed(transform)
+        if rotation:
+            # Rotate the image if rotation is provided
+            transform = QTransform().rotate(float(rotation))
+            image = image.transformed(transform)
 
         # Display the image using a QPixmap
         new_pixmap = QPixmap.fromImage(image)
         self.pixmap_item.setPixmap(new_pixmap.scaled(QSize(self.iViewWidth, self.iViewHeight), Qt.KeepAspectRatio))
         self.scene.setSceneRect(self.scene.itemsBoundingRect())
 
-    def fillRegionWithRed(self, image, u, v, N):
+    def addRedDot(self, image, u, v):
         """
-
+        Fill a region around the specified point (u, v) in the image with red color.
         """
         width, height = image.width(), image.height()
+
+        # Calculate N as a percentage of the image resolution
+        N = min(width, height) * 0.50 / 100
 
         # Calculate the region boundaries
         x_start = max(0, int(u - N / 2))
@@ -897,6 +940,29 @@ class QtiView(QWidget):
         elif event.button() == Qt.RightButton:
             # Stop rotation on right mouse button release
             self.rotation_active = False
+
+    def resetiView(self):
+        """
+        Reset the view and the thumbnails.
+        """
+
+        self.zoom_factor = 1.0
+        self.rotation_angle = 0.0
+
+        # Clear the iView Viewer
+        blank_image = QImage(self.iViewWidth, self.iViewHeight, QImage.Format_RGB32)
+        blank_image.fill(Qt.black)
+        pixmap = QPixmap.fromImage(blank_image)
+        # Add the image to the scene
+        self.pixmap_item = QGraphicsPixmapItem(pixmap)
+        self.scene.addItem(self.pixmap_item)
+        self.graphicsView.setScene(self.scene)
+
+        # Clear the thumbnails
+        for i in reversed(range(self.thumbnail_container_layout.count())):
+            widgetToRemove = self.thumbnail_container_layout.itemAt(i).widget()
+            self.thumbnail_container_layout.removeWidget(widgetToRemove)
+            widgetToRemove.setParent(None)
 
     def closeEvent(self, event):
         self.closed.emit()
