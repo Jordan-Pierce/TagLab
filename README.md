@@ -42,8 +42,8 @@ TagLab allows to :
   - Width and Height of current view is shown in top-right (updates w/ zoom)
   - Users can mark grid cells as complete from within SAM and pos/neg (RITM) tools
   - Working area for SAM and pos/neg (RITM) tools will show you the dimensions of the working area
-- 01/2024
-  - [`iView`](https://www.youtube.com/watch?v=9pj5na7pUdk) using Metashape API to view corresponding images of orthomosaic; requires Professional license
+- 02/2024
+  - [`iView`](https://www.youtube.com/watch?v=H3AjshATPy0) using Metashape API to view corresponding images of orthomosaic; requires Professional license
   - Fixed `Refine` tool
 
 We are working hard to create a website with detailed instructions about TagLab. Stay tuned(!)
