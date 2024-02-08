@@ -1362,7 +1362,7 @@ class QtImageViewerPlus(QtImageViewer):
     def removePoints(self, points):
 
         for point in points:
-            self.removeFromSelectedPointList(point, redraw=False)
+            self.removeFromSelectedPointList(point)
             self.undrawAnnPoint(point, redraw=False)
             # undo is missing
             self.image.annotations.removeBlob(point)
@@ -1375,7 +1375,7 @@ class QtImageViewerPlus(QtImageViewer):
         """
         if type(blob) == Point:
 
-            self.removeFromSelectedPointList(blob, redraw=False)
+            self.removeFromSelectedPointList(blob)
             self.undrawAnnPoint(blob, redraw=False)
             # undo is missing
             self.image.annotations.removeBlob(blob)
