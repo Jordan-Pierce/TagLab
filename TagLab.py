@@ -3212,6 +3212,9 @@ class TagLab(QMainWindow):
 
     @pyqtSlot()
     def chooseSampling(self):
+        """
+        Opens the QtSampleWidget, letting users choose their parameters.
+        """
         if self.activeviewer is not None:
             if self.activeviewer.image is not None:
                 if self.samplePointWidget is None:
@@ -3220,37 +3223,69 @@ class TagLab(QMainWindow):
                     self.samplePointWidget.setWindowModality(Qt.NonModal)
                     self.samplePointWidget.show()
                     self.samplePointWidget.validchoices.connect(self.samplePointAnn)
+                else:
+                    self.closeSamplingWidget()
 
     @pyqtSlot()
     def closeSamplingWidget(self):
-
-        self.samplePointWidget.close()
-        self.samplePointWidget = None
+        """
+        Closes QtSamplerWidget.
+        """
         self.setTool("MOVE")
+        self.samplePointWidget.close()
+        del self.samplePointWidget
+        self.samplePointWidget = None
 
     @pyqtSlot()
     def samplePointAnn(self):
+        """
+        Gets the parameters from the QtSamplerWidget, calls the Sampler class functions,
+        creates points, displays to users as unlabeled points.
+        """
+        QApplication.setOverrideCursor(Qt.WaitCursor)
 
         choosedmethod = self.samplePointWidget.comboMethod.currentText()
         choosedpointnumber = self.samplePointWidget.choosednumber
         offset = self.samplePointWidget.offset
+        wa = self.samplePointWidget.working_area_widget.getWorkingArea()
 
-        if self.project.working_area is not None:
-            area = self.project.working_area
+        if wa is not None:
+            area = [wa[1], wa[0], wa[2], wa[3]]
         else:
             area = [0, 0, self.activeviewer.image.width, self.activeviewer.image.height]
 
+        # Get the current map
         image = self.activeviewer.image
+        # Create sampler object, sample points
         sampler = Sampler(image, area, choosedmethod, choosedpointnumber, offset)
         points = sampler.generate()
 
-        for point in points:
+        # Show progress bar
+        progress_bar = QtProgressBarCustom()
+        progress_bar.setWindowFlags(Qt.ToolTip | Qt.CustomizeWindowHint)
+        progress_bar.setWindowModality(Qt.NonModal)
+        progress_bar.show()
+
+        progress_bar.setMessage("Sampling Points...")
+
+        # Loop through each point and add to scene
+        for p_idx, point in enumerate(points):
             id = self.activeviewer.annotations.getFreePointId()
             newpoint = Point(int(point[0]), int(point[1]), 'Empty', id)
             self.activeviewer.image.annotations.addPoint(newpoint)
+            # Update progress bar
+            progress_bar.setProgress(float(p_idx / len(points) * 100.0))
+            QApplication.processEvents()
 
-        self.activeviewer.drawAllPointsAnn()
+        # Close progress bar
+        progress_bar.close()
+        del progress_bar
+        progress_bar = None
+
         self.closeSamplingWidget()
+        self.activeviewer.drawAllPointsAnn()
+
+        QApplication.restoreOverrideCursor()
 
     @pyqtSlot()
     def editProject(self):

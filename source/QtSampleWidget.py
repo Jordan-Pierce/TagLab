@@ -1,15 +1,18 @@
 from PyQt5.QtCore import Qt, QSize, pyqtSlot, pyqtSignal
 from PyQt5.QtGui import QPainter, QImage, QPixmap, QIcon, qRgb, qRed, qGreen, qBlue
-from PyQt5.QtWidgets import QSlider,QGroupBox, QMessageBox, QCheckBox,  QWidget, QDialog, QFileDialog, QComboBox, QSizePolicy, QLineEdit, QLabel, QPushButton, QHBoxLayout, QVBoxLayout
+from PyQt5.QtWidgets import QComboBox, QSizePolicy, QLineEdit, QLabel, QPushButton, QHBoxLayout, QVBoxLayout
+from PyQt5.QtWidgets import QSlider, QGroupBox, QMessageBox, QCheckBox, QWidget, QDialog, QFileDialog, QStackedWidget
+
 from source.Annotation import Annotation
+from source.QtWorkingAreaWidget import QtWorkingAreaWidget
+
 import numpy as np
 
+
 class QtSampleWidget(QWidget):
-
-
     # choosedSample = pyqtSignal(int)
     closewidget = pyqtSignal()
-    validchoices= pyqtSignal()
+    validchoices = pyqtSignal()
 
     def __init__(self, parent=None):
         super(QtSampleWidget, self).__init__(parent)
@@ -28,10 +31,8 @@ class QtSampleWidget(QWidget):
         self.comboMethod.addItem('Grid Sampling')
         self.comboMethod.addItem('Uniform Sampling')
 
-
         layoutHM.addWidget(self.lblMethod)
         layoutHM.addWidget(self.comboMethod)
-
 
         layoutHN = QHBoxLayout()
         self.lblNumber = QLabel("Number Of Points: ")
@@ -49,13 +50,48 @@ class QtSampleWidget(QWidget):
         layoutHOFF.addWidget(self.lblOFF)
         layoutHOFF.addWidget(self.editOFF)
 
-
         layoutInfo = QVBoxLayout()
         layoutInfo.setAlignment(Qt.AlignLeft)
         layoutInfo.addLayout(layoutHM)
         layoutInfo.addLayout(layoutHN)
         layoutInfo.addLayout(layoutHOFF)
 
+        # Create a stacked widget to hold Select Area Widget
+        layoutHA = QHBoxLayout()
+
+        self.lblWorkingArea = QLabel('Select Working Area')
+        self.lblWorkingArea.setMinimumWidth(300)
+        # Set the alignment to take up the entire width
+        self.lblWorkingArea.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        # Set the font to bold
+        font = self.lblWorkingArea.font()
+        font.setBold(True)
+        self.lblWorkingArea.setFont(font)
+        layoutHA.addWidget(self.lblWorkingArea)
+        layoutHA.setAlignment(Qt.AlignCenter)
+        layoutHA.addStretch()
+
+        # Create a working area widget, connect only what's needed for point sampling
+        self.working_area_widget = QtWorkingAreaWidget(self)
+        self.working_area_widget.btnChooseArea.clicked.connect(self.parent().enableAreaSelection)
+        self.working_area_widget.btnApply.clicked.connect(self.parent().setWorkingArea)
+        selection_tool = self.parent().activeviewer.tools.tools["SELECTAREA"]
+        selection_tool.setAreaStyle("WORKING")
+        selection_tool.rectChanged[int, int, int, int].connect(self.working_area_widget.updateArea)
+        self.working_area_widget.areaChanged[int, int, int, int].connect(selection_tool.setSelectionRectangle)
+
+        # Initialize the working area to the entire screen
+        wa = [0, 0, self.parent().activeviewer.image.width, self.parent().activeviewer.image.height]
+        self.working_area_widget.updateArea(wa[1], wa[0], wa[2], wa[3])
+
+        # These are needed, as the working area values are read from the Label boxes
+        self.working_area_widget.btnCancel.setVisible(False)
+        self.working_area_widget.btnApply.setVisible(False)
+        self.working_area_widget.btnDelete.setVisible(False)
+
+        # Stacked widget contains the working area widget
+        self.stacked_widget = QStackedWidget(self)
+        self.stacked_widget.addWidget(self.working_area_widget)
 
         layoutHB = QHBoxLayout()
 
@@ -70,11 +106,17 @@ class QtSampleWidget(QWidget):
 
         layout = QVBoxLayout()
         layout.addLayout(layoutInfo)
+        layout.addSpacing(20)
+        layout.addLayout(layoutHA)
+        layout.addWidget(self.stacked_widget)
         layout.addLayout(layoutHB)
         self.setLayout(layout)
 
         self.setWindowTitle("Sampling Settings")
-        self.setWindowFlags(Qt.Window | Qt.CustomizeWindowHint | Qt.WindowCloseButtonHint | Qt.WindowTitleHint)
+        self.setWindowFlags(Qt.Window |
+                            Qt.CustomizeWindowHint |
+                            Qt.WindowCloseButtonHint |
+                            Qt.WindowTitleHint)
 
     @pyqtSlot()
     def apply(self):
@@ -94,8 +136,7 @@ class QtSampleWidget(QWidget):
 
         self.validchoices.emit()
 
-
-    def closeEvent(self,event):
+    def closeEvent(self, event):
         self.closewidget.emit()
+        self.working_area_widget.closeEvent(event)
         super(QtSampleWidget, self).closeEvent(event)
-

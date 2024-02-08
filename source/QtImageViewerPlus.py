@@ -17,7 +17,8 @@
 # GNU General Public License (http://www.gnu.org/licenses/gpl.txt)
 # for more details.                                               
 
-""" PyQt image viewer widget for a QPixmap in a QGraphicsView scene with mouse zooming and panning.
+"""
+PyQt image viewer widget for a QPixmap in a QGraphicsView scene with mouse zooming and panning.
     The viewer has also drawing capabilities (differently from QTimage viewer).
 """
 
@@ -240,7 +241,9 @@ class QtImageViewerPlus(QtImageViewer):
         self.activated.emit()
 
     def toggleAnnotations(self, type, enable):
+        """
 
+        """
         if type == "regions":
             for blob in self.annotations.seg_blobs:
                 if enable:
@@ -256,18 +259,20 @@ class QtImageViewerPlus(QtImageViewer):
 
     def updateImageProperties(self):
         """
-        The properties of the image have been changed. This function updates the viewer accordingly.
+        The properties of the image have been changed.
+        This function updates the viewer accordingly.
         NOTE: In practice, only the pixel size needs to be updated.
         """
         self.px_to_mm = self.image.pixelSize()
 
     def setChannel(self, channel, switch=False):
         """
-        Set the image channel to visualize. If the channel has not been previously loaded it is loaded and cached.
+        Set the image channel to visualize.
+        If the channel has not been previously loaded it is loaded and cached.
         """
 
         if self.image is None:
-            raise ("Image has not been previously set in ViewerPlus")
+            raise "Image has not been previously set in ViewerPlus"
 
         self.channel = channel
 
@@ -384,19 +389,27 @@ class QtImageViewerPlus(QtImageViewer):
         self.hideScalebar()
 
     def showScalebar(self):
+        """
+
+        """
         self.scalebar_text.show()
         self.scalebar_line.show()
         self.scalebar_line2.show()
         self.scalebar_line3.show()
 
     def hideScalebar(self):
+        """
+
+        """
         self.scalebar_text.hide()
         self.scalebar_line.hide()
         self.scalebar_line2.hide()
         self.scalebar_line3.hide()
 
     def drawWorkingArea(self):
+        """
 
+        """
         wa = self.project.working_area  # top, left, width, height
 
         if wa is not None:
@@ -408,13 +421,17 @@ class QtImageViewerPlus(QtImageViewer):
                     self.working_area_rect.setRect(wa[1], wa[0], wa[2], wa[3])
 
     def undrawWorkingArea(self):
+        """
 
+        """
         if self.working_area_rect is not None:
             self.scene.removeItem(self.working_area_rect)
             self.working_area_rect = None
 
     def showGrid(self):
+        """
 
+        """
         if self.image is not None:
             if self.image.grid is not None:
                 if not self.image.grid.grid_rects:
@@ -427,7 +444,9 @@ class QtImageViewerPlus(QtImageViewer):
                 self.show_grid = False
 
     def hideGrid(self):
+        """
 
+        """
         if self.image is not None:
             if self.image.grid is not None:
                 self.image.grid.setVisible(False)
@@ -436,14 +455,18 @@ class QtImageViewerPlus(QtImageViewer):
 
     @pyqtSlot(int)
     def toggleGrid(self, check):
+        """
 
+        """
         if check == 0:
             self.hideGrid()
         else:
             self.showGrid()
 
     def enableFill(self):
+        """
 
+        """
         for blob in self.annotations.seg_blobs:
             brush = self.project.classBrushFromName(blob)
             if blob.qpath_gitem is not None:
@@ -452,7 +475,9 @@ class QtImageViewerPlus(QtImageViewer):
         self.fill_enabled = True
 
     def disableFill(self):
+        """
 
+        """
         for blob in self.annotations.seg_blobs:
             if blob.qpath_gitem is not None:
                 blob.qpath_gitem.setBrush(QBrush(Qt.NoBrush))
@@ -461,14 +486,18 @@ class QtImageViewerPlus(QtImageViewer):
 
     @pyqtSlot(int)
     def toggleFill(self, checked):
+        """
 
+        """
         if checked == 0:
             self.disableFill()
         else:
             self.enableFill()
 
     def enableBorders(self):
+        """
 
+        """
         for blob in self.annotations.seg_blobs:
             pen = self.border_selected_pen if blob in self.selected_blobs else self.border_pen
             if blob.qpath_gitem is not None:
@@ -477,7 +506,9 @@ class QtImageViewerPlus(QtImageViewer):
         self.border_enabled = True
 
     def disableBorders(self):
+        """
 
+        """
         for blob in self.annotations.seg_blobs:
             if blob.qpath_gitem is not None:
                 blob.qpath_gitem.setPen(QPen(Qt.NoPen))
@@ -486,14 +517,18 @@ class QtImageViewerPlus(QtImageViewer):
 
     @pyqtSlot(int)
     def toggleBorders(self, checked):
+        """
 
+        """
         if checked == 0:
             self.disableBorders()
         else:
             self.enableBorders()
 
     def enableIds(self):
+        """
 
+        """
         for blob in self.annotations.seg_blobs:
             if blob.id_item is not None:
                 blob.id_item.setVisible(True)
@@ -501,7 +536,9 @@ class QtImageViewerPlus(QtImageViewer):
         self.ids_enabled = True
 
     def disableIds(self):
+        """
 
+        """
         for blob in self.annotations.seg_blobs:
             if blob.id_item is not None:
                 blob.id_item.setVisible(False)
@@ -510,13 +547,18 @@ class QtImageViewerPlus(QtImageViewer):
 
     @pyqtSlot(int)
     def toggleIds(self, checked):
+        """
 
+        """
         if checked == 0:
             self.disableIds()
         else:
             self.enableIds()
 
     def drawAllLayers(self):
+        """
+
+        """
         for layer in self.image.layers:
             if layer.isEnabled():
                 self.drawLayer(layer)
@@ -524,25 +566,38 @@ class QtImageViewerPlus(QtImageViewer):
                 self.undrawLayer(layer)
 
     def undrawAllLayers(self):
+        """
+
+        """
         if self.image != None:
             for layer in self.image.layers:
                 self.undrawLayer(layer)
 
     def drawLayer(self, layer):
+        """
+
+        """
         for shape in layer.shapes:
             self.drawShape(shape, layer.type)
 
     def undrawLayer(self, layer):
+        """
+
+        """
         for shape in layer.shapes:
             self.undrawShape(shape)
 
     def drawAllPointsAnn(self):
+        """
 
+        """
         for annpoint in self.annotations.annpoints:
             self.drawPointAnn(annpoint)
 
     def drawselectedAnnPoints(self):
+        """
 
+        """
         for annpoint in self.annotations.annpoints:
             pen = self.annpoints_pen_selected if annpoint in self.selected_annpoints else self.annpoints_pen
             if annpoint.cross1_gitem is not None:
@@ -551,7 +606,9 @@ class QtImageViewerPlus(QtImageViewer):
                 annpoint.ellipse_gitem.setPen(pen)
 
     def drawPointAnn(self, annpoint):
+        """
 
+        """
         # if the graphics item has just been create we remove it to set it again
         if annpoint.cross1_gitem is not None:
             self.scene.removeItem(annpoint.cross1_gitem)
@@ -599,7 +656,9 @@ class QtImageViewerPlus(QtImageViewer):
         self.scene.addItem(annpoint.id_item)
 
     def drawShape(self, shape, layer_type):
+        """
 
+        """
         if shape.type == "point":
 
             # if the graphics item has just been create we remove it to set it again
@@ -639,7 +698,9 @@ class QtImageViewerPlus(QtImageViewer):
             shape.qpath_gitem.setOpacity(self.transparency_value)
 
     def undrawShape(self, shape):
+        """
 
+        """
         if shape.type == "point":
             if shape.point_gitem is not None:
                 self.scene.removeItem(shape.point_gitem)
@@ -652,7 +713,9 @@ class QtImageViewerPlus(QtImageViewer):
         self.scene.invalidate()
 
     def drawBlob(self, blob):
+        """
 
+        """
         # if it has just been created remove the current graphics item in order to set it again
         if blob.qpath_gitem is not None:
             self.scene.removeItem(blob.qpath_gitem)
@@ -684,7 +747,9 @@ class QtImageViewerPlus(QtImageViewer):
         self.scene.addItem(blob.id_item)
 
     def undrawBlob(self, blob, redraw=True):
+        """
 
+        """
         self.scene.removeItem(blob.qpath_gitem)
         self.scene.removeItem(blob.id_item)
         blob.qpath = None
@@ -695,7 +760,9 @@ class QtImageViewerPlus(QtImageViewer):
             self.scene.invalidate()
 
     def undrawAnnPoint(self, annpoint, redraw=True):
+        """
 
+        """
         self.scene.removeItem(annpoint.cross1_gitem)
         self.scene.removeItem(annpoint.cross2_gitem)
         self.scene.removeItem(annpoint.ellipse_gitem)
@@ -709,7 +776,9 @@ class QtImageViewerPlus(QtImageViewer):
             self.scene.invalidate()
 
     def applyTransparency(self, value):
+        """
 
+        """
         self.transparency_value = 1.0 - (value / 100.0)
         # current annotations
         for blob in self.annotations.seg_blobs:
@@ -723,12 +792,17 @@ class QtImageViewerPlus(QtImageViewer):
                 annpoint.ellipse_gitem.setOpacity(self.transparency_value)
 
     def redrawAllBlobs(self):
+        """
 
+        """
         for blob in self.annotations.seg_blobs:
             self.drawBlob(blob)
 
     # used for crossair cursor
     def drawForeground(self, painter, rect):
+        """
+
+        """
         if self.showCrossair:
             painter.setClipRect(rect)
             pen = QPen(Qt.white, 1)
@@ -740,7 +814,9 @@ class QtImageViewerPlus(QtImageViewer):
     # TOOLS and SELECTIONS
     # Additional Features
     def setTool(self, tool):
+        """
 
+        """
         if not self.isVisible():
             return
 
@@ -757,7 +833,7 @@ class QtImageViewerPlus(QtImageViewer):
         else:
             self.setContextMenuPolicy(Qt.CustomContextMenu)
 
-        if tool in ["SELECTAREA", "RITM",  "SAMPREDICTOR", "SAMGENERATOR"]:
+        if tool in ["SELECTAREA", "RITM", "SAMPREDICTOR", "SAMGENERATOR"]:
             QApplication.setOverrideCursor(Qt.CrossCursor)
 
         if tool == "WATERSHED":
@@ -770,19 +846,21 @@ class QtImageViewerPlus(QtImageViewer):
                 lbl = Label("", "", fill=[0, 0, 0])
                 self.tools.tools["WATERSHED"].setActiveLabel(lbl)
 
-        if tool in["FOURCLICKS", "PLACEANNPOINT", "SAMGENERATOR", "SAMPREDICTOR"]:
+        if tool in ["FOURCLICKS", "PLACEANNPOINT", "SAMGENERATOR", "SAMPREDICTOR"]:
             self.showCrossair = True
         else:
             self.showCrossair = False
 
         # WHEN panning is active or not
-        if tool in ["MOVE", "MATCH", "FOURCLICKS", "RITM", "PLACEANNPOINT","SAMPREDICTOR", "SAMGENERATOR"]:
+        if tool in ["MOVE", "MATCH", "FOURCLICKS", "RITM", "PLACEANNPOINT", "SAMPREDICTOR", "SAMGENERATOR"]:
             self.enablePan()
         else:
             self.disablePan()  # in this case, it is possible to PAN only moving the mouse and pressing the CTRL key
 
     def resetTools(self):
+        """
 
+        """
         self.tools.resetTools()
 
         if self.tools.tool in ["FOURCLICKS", "PLACEANNPOINT", "SAMPREDICTOR", "SAMGENERATOR"]:
@@ -832,7 +910,9 @@ class QtImageViewerPlus(QtImageViewer):
         self.logfile.info("[SELECTION][DOUBLE-CLICK] Selection ends.")
 
     def updateCellState(self, x, y, state):
+        """
 
+        """
         if self.image.grid is not None and self.show_grid is True:
             pos = self.mapFromGlobal(QPoint(x, y))
             scenePos = self.mapToScene(pos)
@@ -850,7 +930,8 @@ class QtImageViewerPlus(QtImageViewer):
     ### MOUSE EVENTS
     # Additional Features
     def mousePressEvent(self, event):
-        """ Start mouse pan or zoom mode.
+        """
+        Start mouse pan or zoom mode.
         """
         self.activated.emit()
 
@@ -899,7 +980,8 @@ class QtImageViewerPlus(QtImageViewer):
         QGraphicsView.mousePressEvent(self, event)
 
     def mouseReleaseEvent(self, event):
-        """ Stop mouse pan or zoom mode (apply zoom if valid).
+        """
+        Stop mouse pan or zoom mode (apply zoom if valid).
         """
         QGraphicsView.mouseReleaseEvent(self, event)
 
@@ -925,7 +1007,9 @@ class QtImageViewerPlus(QtImageViewer):
                 self.tools.leftReleased(x, y)
 
     def mouseMoveEvent(self, event):
+        """
 
+        """
         QGraphicsView.mouseMoveEvent(self, event)
 
         scenePos = self.mapToScene(event.pos())
@@ -952,25 +1036,32 @@ class QtImageViewerPlus(QtImageViewer):
             self.tools.mouseMove(x, y)
 
     def mouseDoubleClickEvent(self, event):
+        """
 
+        """
         scenePos = self.mapToScene(event.pos())
 
         if event.button() == Qt.LeftButton:
             self.selectOp(scenePos.x(), scenePos.y())
 
     def keyPressEvent(self, event):
+        """
 
-        # keys handling goes here..
-
+        """
+        # keys handling goes here
         super().keyPressEvent(event)
 
     def keyReleaseEvent(self, event):
+        """
+
+        """
         if event.key() == Qt.Key_Shift and self.tools.tool in ["RITM", "SAMPREDICTOR", "SAMGENERATOR"]:
             QApplication.setOverrideCursor(Qt.ArrowCursor)
         super().keyPressEvent(event)
 
     def wheelEvent(self, event):
-        """ Zoom in/zoom out.
+        """
+        Zoom in/zoom out.
         """
 
         mods = event.modifiers()
@@ -1006,7 +1097,9 @@ class QtImageViewerPlus(QtImageViewer):
             self.invalidateScene()
 
     def updateScaleBar(self, zoom_factor):
+        """
 
+        """
         REFERENCE_LENGTH_IN_PIXEL = 100
         LENGTH_VLINES = 5
 
@@ -1051,6 +1144,9 @@ class QtImageViewerPlus(QtImageViewer):
     # VISIBILITY AND SELECTION
 
     def dragSelectBlobs(self, x, y):
+        """
+
+        """
         sx = self.dragSelectionStart[0]
         sy = self.dragSelectionStart[1]
         self.resetSelection()
@@ -1075,7 +1171,9 @@ class QtImageViewerPlus(QtImageViewer):
 
     @pyqtSlot(str)
     def setActiveLabel(self, label):
+        """
 
+        """
         if self.tools.tool == "ASSIGN":
             self.tools.tools["ASSIGN"].setActiveLabel(label)
 
@@ -1088,7 +1186,9 @@ class QtImageViewerPlus(QtImageViewer):
 
     @pyqtSlot(str, int)
     def setBorderPen(self, color, thickness):
+        """
 
+        """
         self.border_pen = QPen(Qt.black, thickness)
         self.border_pen.setCosmetic(True)
         color_components = color.split("-")
@@ -1103,7 +1203,9 @@ class QtImageViewerPlus(QtImageViewer):
 
     @pyqtSlot(str, int)
     def setSelectionPen(self, color, thickness):
+        """
 
+        """
         self.border_selected_pen = QPen(Qt.white, thickness)
         self.border_selected_pen.setCosmetic(True)
         color_components = color.split("-")
@@ -1118,7 +1220,9 @@ class QtImageViewerPlus(QtImageViewer):
 
     @pyqtSlot(str, int)
     def setWorkingAreaPen(self, color, thickness):
+        """
 
+        """
         self.working_area_pen = QPen(Qt.white, thickness, Qt.DashLine)
         self.working_area_pen.setCosmetic(True)
         color_components = color.split("-")
@@ -1134,7 +1238,9 @@ class QtImageViewerPlus(QtImageViewer):
                 self.working_area_rect.setPen(self.working_area_pen)
 
     def setBlobVisible(self, blob, visibility):
+        """
 
+        """
         if type(blob) == Blob:
 
             if blob.qpath_gitem is not None:
@@ -1153,7 +1259,9 @@ class QtImageViewerPlus(QtImageViewer):
                 blob.id_item.setVisible(visibility)
 
     def updateVisibility(self):
+        """
 
+        """
         for blob in self.annotations.seg_blobs:
             visibility = self.project.isLabelVisible(blob.class_name)
             self.setBlobVisible(blob, visibility)
@@ -1165,7 +1273,9 @@ class QtImageViewerPlus(QtImageViewer):
     # SELECTED BLOBS MANAGEMENT
 
     def selectAllBlobs(self):
+        """
 
+        """
         self.resetSelection()
         for blob in self.image.annotations.seg_blobs:
             self.addToSelectedList(blob, redraw=False)
@@ -1206,9 +1316,7 @@ class QtImageViewerPlus(QtImageViewer):
             self.logfile.info("[SELECTION] An already selected blob has been added to the current selection.")
         else:
             self.selected_annpoints.append(annpoint)
-            # str = "[SELECTION] A new blob (" + blob.blob_name + ";" + blob.class_name + ") has been selected."
-            # self.logfile.info(str)
-        #
+
         if annpoint.cross1_gitem is not None:
             annpoint.cross1_gitem.setPen(self.annpoints_pen_selected)
             annpoint.cross2_gitem.setPen(self.annpoints_pen_selected)
@@ -1229,6 +1337,9 @@ class QtImageViewerPlus(QtImageViewer):
         self.selectionChanged.emit()
 
     def removeFromSelectedList(self, blob, redraw=True):
+        """
+
+        """
         try:
             # safer if iterating over selected_blobs and calling this function.
             self.selected_blobs = [x for x in self.selected_blobs if not x == blob]
@@ -1246,14 +1357,15 @@ class QtImageViewerPlus(QtImageViewer):
             if redraw:
                 self.scene.invalidate()
 
-
         except Exception as e:
             print("Exception: e", e)
             pass
         self.selectionChanged.emit()
 
     def removeFromSelectedPointList(self, annpoint):
+        """
 
+        """
         try:
             self.selected_annpoints = [x for x in self.selected_annpoints if not x == annpoint]
 
@@ -1277,7 +1389,8 @@ class QtImageViewerPlus(QtImageViewer):
         self.selectionChanged.emit()
 
     def resizeEvent(self, event):
-        """ Maintain current zoom on resize.
+        """
+        Maintain current zoom on resize.
         """
         if self.imgheight:
             self.ZOOM_FACTOR_MIN = min(1.0 * self.width() / self.imgwidth, 1.0 * self.height() / self.imgheight)
@@ -1287,7 +1400,9 @@ class QtImageViewerPlus(QtImageViewer):
         event.accept()
 
     def resetSelection(self):
+        """
 
+        """
         for blob in self.selected_blobs:
             if blob.qpath_gitem is None:
                 print("Selected item with no path!")
@@ -1350,7 +1465,9 @@ class QtImageViewerPlus(QtImageViewer):
             self.scene.invalidate()
 
     def removeBlobs(self, blobs):
+        """
 
+        """
         for blob in blobs:
             self.removeFromSelectedList(blob, redraw=False)
             self.undrawBlob(blob, redraw=False)
@@ -1360,7 +1477,9 @@ class QtImageViewerPlus(QtImageViewer):
         self.scene.invalidate()
 
     def removePoints(self, points):
+        """
 
+        """
         for point in points:
             self.removeFromSelectedPointList(point)
             self.undrawAnnPoint(point, redraw=False)
@@ -1392,7 +1511,9 @@ class QtImageViewerPlus(QtImageViewer):
             self.scene.invalidate()
 
     def updateBlob(self, old_blob, new_blob, selected=False, redraw=True):
+        """
 
+        """
         self.project.updateBlob(self.image, old_blob, new_blob)
 
         self.removeFromSelectedList(old_blob, redraw=False)
@@ -1414,7 +1535,9 @@ class QtImageViewerPlus(QtImageViewer):
             self.scene.invalidate()
 
     def deleteSelectedBlobs(self):
+        """
 
+        """
         if len(self.selected_blobs) > 0:
             self.removeBlobs(self.selected_blobs)
 
@@ -1443,7 +1566,9 @@ class QtImageViewerPlus(QtImageViewer):
         self.scene.invalidate()
 
     def setBlobClass(self, blob, class_name):
+        """
 
+        """
         if blob.class_name == class_name:
             return
         self.undo_data.setBlobClass(blob, class_name)
@@ -1455,7 +1580,9 @@ class QtImageViewerPlus(QtImageViewer):
             self.scene.invalidate()
 
     def setAnnPointClass(self, annpoint, class_name):
+        """
 
+        """
         if annpoint.class_name == class_name:
             return
         # self.undo_data.setBlobClass(annpoint, class_name)  #data va fatto
@@ -1469,10 +1596,15 @@ class QtImageViewerPlus(QtImageViewer):
     ###### UNDO STUFF #####
 
     def saveUndo(self):
+        """
+
+        """
         self.undo_data.saveUndo()
 
     def undo(self):
+        """
 
+        """
         if self.tools.tool == "RITM" and self.tools.tools["RITM"].hasPoints():
             self.tools.tools["RITM"].undo_click()
             return
@@ -1510,6 +1642,9 @@ class QtImageViewerPlus(QtImageViewer):
         self.updateVisibility()
 
     def redo(self):
+        """
+
+        """
         operation = self.undo_data.redo()
         if operation is None:
             return
@@ -1538,15 +1673,23 @@ class QtImageViewerPlus(QtImageViewer):
 
     @pyqtSlot(str)
     def logMessage(self, message):
+        """
 
+        """
         self.logfile.info(message)
 
     @pyqtSlot(Blob, str)
     def logBlobInfo(self, blob, msg):
+        """
 
+        """
         message1 = msg + " Blob_id={:d} Blob_name={:s} class={:s}".format(blob.id, blob.blob_name, blob.class_name)
-        message2 = msg + " top={:.1f} left={:.1f} width={:.1f} height={:.1f}".format(blob.bbox[0], blob.bbox[1],
-                                                                                     blob.bbox[2], blob.bbox[3])
+
+        message2 = msg + " top={:.1f} left={:.1f} width={:.1f} height={:.1f}".format(blob.bbox[0],
+                                                                                     blob.bbox[1],
+                                                                                     blob.bbox[2],
+                                                                                     blob.bbox[3])
+
         message3 = msg + " Area= {:.4f} , Perimeter= {:.4f}".format(blob.area, blob.perimeter)
 
         self.logfile.info(message1)

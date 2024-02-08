@@ -122,7 +122,11 @@ class QtWorkingAreaWidget(QWidget):
         self.setLayout(layout)
 
         self.setWindowTitle("Working area")
-        self.setWindowFlags(Qt.Window | Qt.CustomizeWindowHint | Qt.WindowCloseButtonHint | Qt.WindowTitleHint | Qt.WindowStaysOnTopHint)
+        self.setWindowFlags(Qt.Window |
+                            Qt.CustomizeWindowHint |
+                            Qt.WindowCloseButtonHint |
+                            Qt.WindowTitleHint |
+                            Qt.WindowStaysOnTopHint)
 
     def closeEvent(self, event):
 
@@ -131,7 +135,9 @@ class QtWorkingAreaWidget(QWidget):
 
     @pyqtSlot(str)
     def notifyAreaChanged(self, txt):
+        """
 
+        """
         try:
             x = int(self.edit_X.text())
             y = int(self.edit_Y.text())
@@ -142,26 +148,29 @@ class QtWorkingAreaWidget(QWidget):
         except:
             pass
 
-
     @pyqtSlot(int, int, int, int)
     def updateArea(self, x, y, w, h):
+        """
 
+        """
         self.edit_X.setText(str(x))
         self.edit_Y.setText(str(y))
         self.edit_W.setText(str(w))
         self.edit_H.setText(str(h))
 
-
     def deleteWorkingAreaValues(self):
+        """
 
+        """
         self.edit_X.setText("")
         self.edit_Y.setText("")
         self.edit_W.setText("")
         self.edit_H.setText("")
 
-
     def getWorkingArea(self):
+        """
 
+        """
         x = 0
         y = 0
         w = 0
