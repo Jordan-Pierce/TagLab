@@ -24,6 +24,7 @@ from source.tools.SamInteractive import SamInteractive
 
 from source.tools.PlaceAnnPoint import PlaceAnnPoint
 
+# Additional Features
 from source.tools.SAMPredictor import SAMPredictor
 from source.tools.SAMGenerator import SAMGenerator
 
@@ -65,6 +66,8 @@ class Tools(object):
             "SAM": Sam(self.viewerplus),
             "SAMINTERACTIVE": SamInteractive(self.viewerplus, self.corrective_points),
             "RITM": Ritm(self.viewerplus, self.corrective_points),
+
+            # Additional Features
             "SAMPREDICTOR": SAMPredictor(self.viewerplus, self.pick_points),
             "SAMGENERATOR": SAMGenerator(self.viewerplus, self.pick_points)
         }
@@ -88,6 +91,8 @@ class Tools(object):
         self.tools["RITM"].reset()
         self.tools["SAM"].reset()
         self.tools["SELECTAREA"].reset()
+
+        # Additional Features
         self.tools["SAMPREDICTOR"].reset()
         self.tools["SAMGENERATOR"].reset()
 
@@ -114,6 +119,7 @@ class Tools(object):
             return
         self.tools[self.tool].leftPressed(x, y, mods)
 
+    # Additional Features
     def rightPressed(self, x, y, mods=None):
         if self.tool == "RITM":
             self.tools[self.tool].rightPressed(x, y, mods)

@@ -4,7 +4,7 @@ from PyQt5.QtGui import QPen, QBrush, QFont
 
 from source.Blob import Blob
 from source.tools.Tool import Tool
-from source.utils import qimageToNumpyArray, cropQImage
+from source.genutils import qimageToNumpyArray, cropQImage
 
 import os
 import cv2
