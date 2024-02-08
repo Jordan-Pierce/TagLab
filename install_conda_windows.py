@@ -182,7 +182,8 @@ install_requires = [
     'albumentations',
     'shapely',
     'numpy',
-    'segment-anything'
+    'segment-anything',
+    'qhoptim'
 ]
 
 if python_sub_v < 9:
