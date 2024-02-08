@@ -883,8 +883,16 @@ class QtImageViewerPlus(QtImageViewer):
 
         if event.button() == Qt.RightButton:
             (x, y) = self.clipScenePos(scenePos)
-            if self.tools.tool in ["RITM", "SAMINTERACTIVE", "SAMPREDICTOR", "SAMGENERATOR"]:
-                self.tools.rightPressed(x, y, mods)
+
+            # User's asked for the ability to see the context menu while using
+            # tools so they can mark cells as completed without exiting the tool
+            if self.tools.tool in ['RITM', 'SAMPREDICTOR', 'SAMGENERATOR']:
+                if mods == Qt.ShiftModifier:
+                    self.setContextMenuPolicy(Qt.NoContextMenu)
+                    self.tools.rightPressed(x, y, mods)
+                else:
+                    self.setContextMenuPolicy(Qt.CustomContextMenu)
+
             else:
                 self.rightMouseButtonPressed.emit(x, y)
 
