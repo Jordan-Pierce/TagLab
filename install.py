@@ -3,9 +3,6 @@ import sys
 import os
 import subprocess
 from pathlib import Path
-import importlib.util as importutil
-from os import path
-import urllib.request
 
 osused = platform.system()
 if osused != 'Linux' and osused != 'Windows' and osused != 'Darwin':
@@ -258,96 +255,57 @@ if osused != 'Windows':
     subprocess.check_call([sys.executable, "-m", "pip", "install", gdal_package])
     subprocess.check_call([sys.executable, "-m", "pip", "install", 'rasterio'])
 else:
-
     base_url = 'http://taglab.isti.cnr.it/wheels/'
     pythonversion = str(sys.version_info[0]) + str(sys.version_info[1])
     # compute rasterio and gdal urls download
     rasterio_win_version = '1.2.10'
     gdal_win_version = '3.4.3'
     filename_gdal = 'gdal-' + gdal_win_version + '-cp' + pythonversion + '-cp' + pythonversion
-    filename_rasterio = 'rasterio-' + rasterio_win_version + '-cp' + pythonversion + '-cp' + pythonversion
+    filename_rasterio = 'rasterio-' + rasterio_win_version +'-cp' + pythonversion + '-cp' + pythonversion
     filename_gdal += '-win_amd64.whl'
     filename_rasterio += '-win_amd64.whl'
     base_url_gdal = base_url + 'gdal/' + filename_gdal
-    base_url_rasterio = base_url + 'rasterio/' + filename_rasterio
+    base_url_rastetio = base_url + 'rasterio/' + filename_rasterio
 
-    rasterio_is_installed = importutil.find_spec("rasterio")
-    gdal_is_installed = importutil.find_spec("osgeo.gdal")
+    print('URL GDAL: ' + base_url_gdal)
 
-    if rasterio_is_installed is not None:
-        import rasterio
-        print("RASTERIO ",rasterio.__version__, " is installed. Version ", rasterio_win_version, " is required.")
-    else:
-        # retrieve rasterio from TagLab web site
-        print('GET RASTERIO FROM URL: ' + base_url_rasterio)
+    # download gdal and rasterio
+    from os import path
+    import urllib.request
 
-        this_directory = path.abspath(path.dirname(__file__))
-        try:
-            slib = 'Rasterio'
-            opener = urllib.request.build_opener()
-            opener.addheaders = [('User-agent', 'Mozilla/5.0')]
-            urllib.request.install_opener(opener)
-            urllib.request.urlretrieve(base_url_rasterio, this_directory + '/' + filename_rasterio)
-        except:
-            raise Exception("Cannot download " + slib + ".")
+    this_directory = path.abspath(path.dirname(__file__))
+    try:
+        slib = 'GDAL'
+        opener = urllib.request.build_opener()
+        opener.addheaders = [('User-agent', 'Mozilla/5.0')]
+        urllib.request.install_opener(opener)
+        urllib.request.urlretrieve(base_url_gdal, this_directory + '/' + filename_gdal)
+        slib = 'Rasterio'
+        urllib.request.urlretrieve(base_url_rastetio, this_directory + '/' + filename_rasterio)
+    except:
+        raise Exception("Cannot download " + slib + ".")
 
-        # install rasterio
-        subprocess.check_call([sys.executable, "-m", "pip", "install", filename_rasterio])
+    # install gdal and rasterio
+    subprocess.check_call([sys.executable, "-m", "pip", "install", filename_gdal])
+    subprocess.check_call([sys.executable, "-m", "pip", "install", filename_rasterio])
 
-        # delete wheel files
-        os.remove(this_directory + '/' + filename_rasterio)
-
-    if gdal_is_installed is not None:
-        import osgeo.gdal
-        print("GDAL ",osgeo.gdal.__version__, " is installed. Version ", gdal_win_version, " is required.")
-    else:
-        # retrieve GDAL from TagLab web site
-        print('GET GDAL FROM URL: ' + base_url_gdal)
-
-        # download gdal and rasterio
-        from os import path
-        import urllib.request
-
-        this_directory = path.abspath(path.dirname(__file__))
-        try:
-            slib = 'GDAL'
-            opener = urllib.request.build_opener()
-            opener.addheaders = [('User-agent', 'Mozilla/5.0')]
-            urllib.request.install_opener(opener)
-            urllib.request.urlretrieve(base_url_gdal, this_directory + '/' + filename_gdal)
-        except:
-            raise Exception("Cannot download " + slib + ".")
-
-        # install gdal
-        subprocess.check_call([sys.executable, "-m", "pip", "install", filename_gdal])
-
-        # delete wheel files
-        os.remove(this_directory + '/' + filename_gdal)
-
-# Install SAM
-command = [sys.executable, "-m", "pip", "install", "segment-anything"]
-subprocess.run(command, check=True)
+    #delete wheel files
+    os.remove(this_directory + '/' + filename_gdal)
+    os.remove(this_directory + '/' + filename_rasterio)
 
 # check for other networks
 print('Downloading networks...')
+base_url = 'http://taglab.isti.cnr.it/models/'
 from os import path
 import urllib.request
-
 this_directory = path.abspath(path.dirname(__file__))
-
-# TagLab Weights
-base_url = 'http://taglab.isti.cnr.it/models/'
-net_file_names = ['dextr_corals.pth',
-                  'deeplab-resnet.pth.tar',
-                  'ritm_corals.pth',
-                  'pocillopora.net',
-                  'porites.net',
-                  'pocillopora_porite_montipora.net']
+net_file_names = ['dextr_corals.pth', 'deeplab-resnet.pth.tar', 'ritm_corals.pth',
+                  'pocillopora.net', 'porites.net', 'pocillopora_porite_montipora.net']
 
 for net_name in net_file_names:
     filename_dextr_corals = 'dextr_corals.pth'
     net_file = Path('models/' + net_name)
-    if not net_file.is_file():  # if file not exists
+    if not net_file.is_file(): #if file not exists
         try:
             url_dextr = base_url + net_name
             print('Downloading ' + url_dextr + '...')
@@ -357,31 +315,5 @@ for net_name in net_file_names:
             urllib.request.urlretrieve(url_dextr, 'models/' + net_name)
         except:
             raise Exception("Cannot download " + net_name + ".")
-    else:
-        print(net_name + ' already exists.')
-
-
-# SAM Weights
-base_url = "https://dl.fbaipublicfiles.com/segment_anything/"
-net_file_names = ["sam_vit_b_01ec64.pth",
-                  "sam_vit_l_0b3195.pth",
-                  "sam_vit_h_4b8939.pth"]
-
-for net_name in net_file_names:
-    path_dextr = f"models/{net_name}"
-    if not os.path.exists(path_dextr):
-        try:
-            url_dextr = base_url + net_name
-            print('Downloading ' + url_dextr + '...')
-            # Send an HTTP GET request to the URL
-            opener = urllib.request.build_opener()
-            opener.addheaders = [('User-agent', 'Mozilla/5.0')]
-            urllib.request.install_opener(opener)
-            urllib.request.urlretrieve(url_dextr, path_dextr)
-            print(f"NOTE: Downloaded file successfully")
-            print(f"NOTE: Saved file to {path_dextr}")
-        except:
-            raise Exception("Cannot download " + net_name + ".")
-
     else:
         print(net_name + ' already exists.')

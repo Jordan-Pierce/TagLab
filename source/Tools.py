@@ -5,6 +5,7 @@ from source.tools.EditPoints import EditPoints
 from source.tools.Scribbles import Scribbles
 from source.tools.CorrectivePoints import CorrectivePoints
 
+
 from source.tools.CreateCrack import CreateCrack
 from source.tools.SplitBlob import SplitBlob
 from source.tools.Assign import Assign
@@ -14,12 +15,15 @@ from source.tools.BricksSegmentation import BricksSegmentation
 from source.tools.Cut import Cut
 from source.tools.Freehand import Freehand
 from source.tools.Ruler import Ruler
-from source.tools.DeepExtreme import DeepExtreme
+from source.tools.FourClicks import FourClicks
 from source.tools.Match import Match
 from source.tools.SelectArea import SelectArea
 from source.tools.Ritm import Ritm
-from source.tools.SAMPredictor import SAMPredictor
-from source.tools.SAMGenerator import SAMGenerator
+from source.tools.Sam import Sam
+from source.tools.SamInteractive import SamInteractive
+
+from source.tools.PlaceAnnPoint import PlaceAnnPoint
+
 
 
 class Tools(object):
@@ -35,7 +39,7 @@ class Tools(object):
         self.corrective_points = CorrectivePoints(self.scene)
 
         self.CROSS_LINE_WIDTH = 2
-        self.extreme_pick_style = {'width': self.CROSS_LINE_WIDTH, 'color': Qt.red, 'size': 6}
+        self.extreme_pick_style = {'width': self.CROSS_LINE_WIDTH, 'color': Qt.red,  'size': 6}
 
         # DATA FOR THE CREATECRACK TOOL
         self.crackWidget = None
@@ -52,12 +56,13 @@ class Tools(object):
             "WATERSHED": Watershed(self.viewerplus, self.scribbles),
             "BRICKS": BricksSegmentation(self.viewerplus),
             "RULER": Ruler(self.viewerplus, self.pick_points),
-            "DEEPEXTREME": DeepExtreme(self.viewerplus, self.pick_points),
+            "FOURCLICKS": FourClicks(self.viewerplus, self.pick_points),
+            "PLACEANNPOINT": PlaceAnnPoint(self.viewerplus),
             "MATCH": Match(self.viewerplus),
             "SELECTAREA": SelectArea(self.viewerplus, self.pick_points),
-            "RITM": Ritm(self.viewerplus, self.corrective_points),
-            "SAMPREDICTOR": SAMPredictor(self.viewerplus, self.pick_points),
-            "SAMGENERATOR": SAMGenerator(self.viewerplus, self.pick_points)
+            "SAM": Sam(self.viewerplus),
+            "SAMINTERACTIVE": SamInteractive(self.viewerplus, self.corrective_points),
+            "RITM": Ritm(self.viewerplus, self.corrective_points)
         }
         # connect infomessage, log, blobinfo for   all tools with self.infoWidget.setInfoMessage(
 
@@ -74,11 +79,11 @@ class Tools(object):
 
         self.scene.invalidate(self.scene.sceneRect())
 
-        self.tools["DEEPEXTREME"].reset()
+        self.tools["SAMINTERACTIVE"].reset()
+        self.tools["FOURCLICKS"].reset()
         self.tools["RITM"].reset()
+        self.tools["SAM"].reset()
         self.tools["SELECTAREA"].reset()
-        self.tools["SAMPREDICTOR"].reset()
-        self.tools["SAMGENERATOR"].reset()
 
         if self.tool == "AUTOCLASS":
             self.corals_classifier.stopProcessing()
@@ -96,16 +101,15 @@ class Tools(object):
             self.viewerplus.bricksWidget.close()
         self.viewerplus.bricksWidget = None
 
-    # logfile, annotations, selecttion, activelabelbname, undo
-    def leftPressed(self, x, y, mods=None):
+    #logfile, annotations, selecttion, activelabelbname, undo
+
+    def leftPressed(self, x, y, mods = None):
         if self.tool == "MOVE":
             return
         self.tools[self.tool].leftPressed(x, y, mods)
 
-    def rightPressed(self, x, y, mods=None):
-        if self.tool == "RITM":
-            self.tools[self.tool].rightPressed(x, y, mods)
-        elif self.tool in ["SAMPREDICTOR", "SAMGENERATOR"]:
+    def rightPressed(self, x, y, mods = None):
+        if self.tool == "RITM" or self.tool == "SAMINTERACTIVE":
             self.tools[self.tool].rightPressed(x, y, mods)
 
     def mouseMove(self, x, y):
@@ -127,3 +131,8 @@ class Tools(object):
         if self.tool == "MOVE":
             return
         self.tools[self.tool].apply()
+
+
+
+
+
