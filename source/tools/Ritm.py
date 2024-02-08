@@ -1,6 +1,6 @@
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, QPointF, pyqtSignal
 from PyQt5.QtWidgets import QApplication, QMessageBox
-from PyQt5.QtGui import QPen, QBrush
+from PyQt5.QtGui import QPen, QBrush, QFont
 
 from source.tools.Tool import Tool
 from source.Mask import paintMask, jointBox, jointMask, replaceMask, checkIntersection, intersectMask
@@ -18,6 +18,7 @@ from models.isegm.inference import utils as ritmutils
 
 from source.tools import utils
 
+
 class Ritm(Tool):
 
     def __init__(self, viewerplus, corrective_points):
@@ -27,7 +28,7 @@ class Ritm(Tool):
         self.ritm_net = None
         self.MAX_POINTS = 10
 
-        self.clicker = clicker.Clicker() #handles clicked point (original code of ritm)
+        self.clicker = clicker.Clicker()  # handles clicked point (original code of ritm)
         self.predictor = None
         self.predictor_params = {'brs_mode': 'NoBRS'}
         self.init_mask = None
@@ -35,27 +36,31 @@ class Ritm(Tool):
         self.current_blobs = []
         self.blob_to_correct = None  # selected blob
         self.work_area_bbox = [0, 0, 0, 0]
-        self.work_area_mask = None   # to not overlap old segmented regions
+        self.work_area_mask = None  # to not overlap old segmented regions
         self.work_area_item = None
+        self.work_area_text_tl = None
+        self.work_area_text_br = None
         self.states = []
 
-
     def checkPointPosition(self, x, y):
+        """
 
-        if self.work_area_bbox[2]==0 and self.work_area_bbox[3]==0:
+        """
+        if self.work_area_bbox[2] == 0 and self.work_area_bbox[3] == 0:
             return True
-        if x <= self.work_area_bbox[1] or x>= self.work_area_bbox[1]+self.work_area_bbox[2]:
+        if x <= self.work_area_bbox[1] or x >= self.work_area_bbox[1] + self.work_area_bbox[2]:
             return False
-        if y <= self.work_area_bbox[0] or y>= self.work_area_bbox[0] + self.work_area_bbox[3]:
+        if y <= self.work_area_bbox[0] or y >= self.work_area_bbox[0] + self.work_area_bbox[3]:
             return False
 
         return True
 
-
     def leftPressed(self, x, y, mods):
+        """
 
+        """
         points = self.points.positive_points
-        if len(points) < self.MAX_POINTS and self.checkPointPosition(x,y) is True and mods == Qt.ShiftModifier:
+        if len(points) < self.MAX_POINTS and self.checkPointPosition(x, y) is True and mods == Qt.ShiftModifier:
             self.points.addPoint(x, y, positive=True)
             message = "[TOOL][RITM] New positive point added (" + str(len(points)) + ")"
             self.log.emit(message)
@@ -63,11 +68,12 @@ class Ritm(Tool):
             # apply segmentation
             self.segment()
 
-
     def rightPressed(self, x, y, mods):
+        """
 
+        """
         points = self.points.negative_points
-        if len(points) < self.MAX_POINTS and self.checkPointPosition(x,y) is True and mods == Qt.ShiftModifier:
+        if len(points) < self.MAX_POINTS and self.checkPointPosition(x, y) is True and mods == Qt.ShiftModifier:
             self.points.addPoint(x, y, positive=False)
             message = "[TOOL][RITM] New negative point added (" + str(len(points)) + ")"
             self.log.emit(message)
@@ -76,9 +82,15 @@ class Ritm(Tool):
             self.segment()
 
     def hasPoints(self):
+        """
+
+        """
         return self.points.nclicks() > 0
 
     def undo_click(self):
+        """
+
+        """
         self.points.removeLastPoint()
         nclicks = self.points.nclicks()
         if nclicks == 0:
@@ -89,14 +101,17 @@ class Ritm(Tool):
             self.predictor.set_states(prev_state)
             self.segment(save_status=False)
 
-
     def initializeWorkArea(self):
-        # if image_crop is too big it must be rescaled otherwise the image is too big and the ritm goes out of memory
+        """
+        Note: If image_crop is too big it must be rescaled,
+        otherwise the image is too big and the ritm goes out of memory
+        """
+
+        from source.QtImageViewerPlus import TextItem
 
         rect_map = self.viewerplus.viewportToScene()
         self.work_area_bbox = [round(rect_map.top()), round(rect_map.left()),
                                round(rect_map.width()), round(rect_map.height())]
-
 
         image_crop = cropQImage(self.viewerplus.img_map, self.work_area_bbox)
         input_image = qimageToNumpyArray(image_crop)
@@ -116,7 +131,7 @@ class Ritm(Tool):
 
         # check size of the input image to prevent stuck of the PC (for CPU version)
         if torch.cuda.is_available() is False:
-            megapixels = (input_image.shape[0] * input_image.shape[1]) / (1024.0*1024.0)
+            megapixels = (input_image.shape[0] * input_image.shape[1]) / (1024.0 * 1024.0)
             if megapixels > 9.0:
                 box = QMessageBox()
                 box.setText("The input image is too big. Try to reduce the viewing area by zooming in.")
@@ -135,21 +150,47 @@ class Ritm(Tool):
         h = self.work_area_bbox[3]
         self.work_area_item = self.viewerplus.scene.addRect(x, y, w, h, pen, brush)
         self.work_area_item.setZValue(3)
-        #self.workingAreaIsActive.emit()
+
+        # Draw box dimensions (tl)
+        font_size = 8
+        text_item = TextItem(f"{w} x {h}", QFont("Roboto", font_size, QFont.Bold))
+        text_item.setPos(x + (len(str(w)) + 1) * font_size, y - font_size)
+        text_item.setTransformOriginPoint(QPointF(x, y))
+        text_item.setZValue(3)
+        text_item.setBrush(Qt.white)
+        text_item.setOpacity(1.0)
+        self.work_area_text_tl = text_item
+        self.viewerplus.scene.addItem(self.work_area_text_tl)
+
+        # Draw box dimensions (br)
+        font_size = 8
+        text_item = TextItem(f"{w} x {h}", QFont("Roboto", font_size, QFont.Bold))
+        text_item.setPos((x + w) - (len(str(w)) + 1) * font_size, (y + h) + font_size)
+        text_item.setTransformOriginPoint(QPointF(x + w, y + h))
+        text_item.setZValue(3)
+        text_item.setBrush(Qt.white)
+        text_item.setOpacity(1.0)
+        self.work_area_text_br = text_item
+        self.viewerplus.scene.addItem(self.work_area_text_br)
 
         return True
 
     def createWorkAreaMask(self):
+        """
 
+        """
         w = self.work_area_bbox[2]
         h = self.work_area_bbox[3]
-        self.work_area_mask = np.zeros((h,w), dtype=np.int32)
+        self.work_area_mask = np.zeros((h, w), dtype=np.int32)
         for blob in self.viewerplus.image.annotations.seg_blobs:
             if checkIntersection(self.work_area_bbox, blob.bbox):
                 mask = blob.getMask()
                 paintMask(self.work_area_mask, self.work_area_bbox, mask, blob.bbox, 1)
 
     def intersectionWithExistingBlobs(self, blob):
+        """
+
+        """
         bigmask = self.work_area_mask.copy()
         pixels_before = np.count_nonzero(bigmask)
         mask = blob.getMask()
@@ -161,7 +202,9 @@ class Ritm(Tool):
         return perc_intersect
 
     def prepareInput(self):
+        """
 
+        """
         nclicks = self.points.nclicks()
         validArea = True
 
@@ -174,10 +217,10 @@ class Ritm(Tool):
             if self.blob_to_correct is None:
                 self.blob_to_correct = self.viewerplus.selected_blobs[0]
                 self.viewerplus.resetSelection()
-                self.viewerplus.undrawBlob(self.blob_to_correct) #removeBlob(self.blob_to_correct)
+                self.viewerplus.undrawBlob(self.blob_to_correct)  # removeBlob(self.blob_to_correct)
                 if self.work_area_mask is not None:
                     paintMask(self.work_area_mask, self.work_area_bbox, self.blob_to_correct.getMask(),
-                            self.blob_to_correct.bbox, 0)
+                              self.blob_to_correct.bbox, 0)
 
             mask = self.blob_to_correct.getMask()
 
@@ -206,7 +249,9 @@ class Ritm(Tool):
         return validArea
 
     def segment(self, save_status=True):
+        """
 
+        """
         self.infoMessage.emit("Segmentation is ongoing..")
         self.log.emit("[TOOL][RITM] Segmentation begins..")
 
@@ -235,8 +280,8 @@ class Ritm(Tool):
             else:
                 segm_mask = pred > 0.5
                 segm_mask = segm_mask.astype(np.int32)
-                offsetx= self.work_area_bbox[1]
-                offsety=self.work_area_bbox[0]
+                offsetx = self.work_area_bbox[1]
+                offsety = self.work_area_bbox[0]
 
                 # this handle corrections by fusing the new segm_mask with the one of the object to correct
                 if self.blob_to_correct is not None:
@@ -245,11 +290,11 @@ class Ritm(Tool):
                     joint_mask = jointMask(bbox_to_correct, self.work_area_bbox)
                     paintMask(joint_mask[0], joint_mask[1], mask_to_correct, bbox_to_correct, 1)
                     replaceMask(joint_mask[0], joint_mask[1], segm_mask, self.work_area_bbox)
-                    offsetx= joint_mask[1][1]
-                    offsety= joint_mask[1][0]
+                    offsetx = joint_mask[1][1]
+                    offsety = joint_mask[1][0]
                     segm_mask = joint_mask[0]
 
-                segm_mask = segm_mask*255
+                segm_mask = segm_mask * 255
                 torch.cuda.empty_cache()
 
                 utils.undrawAllBlobs(self.current_blobs, self.viewerplus.scene)
@@ -259,7 +304,7 @@ class Ritm(Tool):
 
                 for blob in blobs:
                     if self.intersectionWithExistingBlobs(blob) < 90.0:
-                       self.current_blobs.append(blob)
+                        self.current_blobs.append(blob)
 
                 if self.blob_to_correct is not None:
                     mask_to_correct = self.blob_to_correct.getMask()
@@ -268,15 +313,15 @@ class Ritm(Tool):
                     biggest_intersection = -1.0
 
                     for blob in self.current_blobs:
-                        intersection = intersectMask(mask_to_correct, box_to_correct , blob.getMask(), blob.bbox)
+                        intersection = intersectMask(mask_to_correct, box_to_correct, blob.getMask(), blob.bbox)
                         if intersection is None:
-                           intersecting_pixels = 0
+                            intersecting_pixels = 0
                         else:
-                           intersecting_pixels = np.count_nonzero(intersection[0])
+                            intersecting_pixels = np.count_nonzero(intersection[0])
 
                         if intersecting_pixels > biggest_intersection:
-                           biggest_intersection = intersecting_pixels
-                           biggest_blob = blob
+                            biggest_intersection = intersecting_pixels
+                            biggest_blob = blob
 
                     self.current_blobs = [biggest_blob]
 
@@ -291,7 +336,9 @@ class Ritm(Tool):
         self.log.emit("[TOOL][RITM] Segmentation ends.")
 
     def loadNetwork(self):
+        """
 
+        """
         if self.ritm_net is None:
 
             self.infoMessage.emit("Loading RITM network..")
@@ -322,7 +369,9 @@ class Ritm(Tool):
         return True
 
     def resetNetwork(self):
+        """
 
+        """
         torch.cuda.empty_cache()
         if self.ritm_net is not None:
             del self.ritm_net
@@ -336,7 +385,7 @@ class Ritm(Tool):
         # finalize created blobs
         message = "[TOOL][RITM][BLOB-CREATED]"
         for blob in self.current_blobs:
-            
+
             if self.blob_to_correct is not None:
                 self.viewerplus.removeBlob(self.blob_to_correct)
                 blob.id = self.blob_to_correct.id
@@ -346,7 +395,7 @@ class Ritm(Tool):
             # order is important: first add then setblob class!
             utils.undrawBlob(blob, self.viewerplus.scene, redraw=False)
             self.viewerplus.addBlob(blob, selected=True)
-            #if self.blob_to_correct is not None:
+            # if self.blob_to_correct is not None:
             #    self.viewerplus.setBlobClass(blob, self.blob_to_correct.class_name)
 
             self.blobInfo.emit(blob, message)
@@ -375,12 +424,11 @@ class Ritm(Tool):
         """
         Reset all the information. Called when ESCAPE is pressed.
         """
-
         self.resetNetwork()
 
         # re-add the blob removed
         if self.blob_to_correct is not None:
-            #self.viewerplus.addBlob(self.blob_to_correct)
+            # self.viewerplus.addBlob(self.blob_to_correct)
             self.viewerplus.drawBlob(self.blob_to_correct)
             self.blob_to_correct = None
 
@@ -392,7 +440,9 @@ class Ritm(Tool):
         self.resetWorkArea()
 
     def drawBlob(self, blob):
+        """
 
+        """
         scene = self.viewerplus.scene
 
         # create the suitable brush
@@ -403,5 +453,3 @@ class Ritm(Tool):
             brush = self.viewerplus.project.classBrushFromName(self.blob_to_correct)
 
         utils.drawBlob(blob, brush, scene, self.viewerplus.transparency_value, redraw=False)
-
-

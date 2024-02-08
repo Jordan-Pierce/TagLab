@@ -24,6 +24,8 @@ from source.tools.SamInteractive import SamInteractive
 
 from source.tools.PlaceAnnPoint import PlaceAnnPoint
 
+from source.tools.SAMPredictor import SAMPredictor
+from source.tools.SAMGenerator import SAMGenerator
 
 
 class Tools(object):
@@ -62,7 +64,9 @@ class Tools(object):
             "SELECTAREA": SelectArea(self.viewerplus, self.pick_points),
             "SAM": Sam(self.viewerplus),
             "SAMINTERACTIVE": SamInteractive(self.viewerplus, self.corrective_points),
-            "RITM": Ritm(self.viewerplus, self.corrective_points)
+            "RITM": Ritm(self.viewerplus, self.corrective_points),
+            "SAMPREDICTOR": SAMPredictor(self.viewerplus, self.pick_points),
+            "SAMGENERATOR": SAMGenerator(self.viewerplus, self.pick_points)
         }
         # connect infomessage, log, blobinfo for   all tools with self.infoWidget.setInfoMessage(
 
@@ -84,6 +88,8 @@ class Tools(object):
         self.tools["RITM"].reset()
         self.tools["SAM"].reset()
         self.tools["SELECTAREA"].reset()
+        self.tools["SAMPREDICTOR"].reset()
+        self.tools["SAMGENERATOR"].reset()
 
         if self.tool == "AUTOCLASS":
             self.corals_classifier.stopProcessing()
@@ -108,8 +114,10 @@ class Tools(object):
             return
         self.tools[self.tool].leftPressed(x, y, mods)
 
-    def rightPressed(self, x, y, mods = None):
-        if self.tool == "RITM" or self.tool == "SAMINTERACTIVE":
+    def rightPressed(self, x, y, mods=None):
+        if self.tool == "RITM":
+            self.tools[self.tool].rightPressed(x, y, mods)
+        elif self.tool in ["SAMINTERACTIVE", "SAMPREDICTOR", "SAMGENERATOR"]:
             self.tools[self.tool].rightPressed(x, y, mods)
 
     def mouseMove(self, x, y):
@@ -131,8 +139,3 @@ class Tools(object):
         if self.tool == "MOVE":
             return
         self.tools[self.tool].apply()
-
-
-
-
-
