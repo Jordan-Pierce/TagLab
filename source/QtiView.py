@@ -964,5 +964,23 @@ class QtiView(QWidget):
             self.thumbnail_container_layout.removeWidget(widgetToRemove)
             widgetToRemove.setParent(None)
 
+    def deactivateMetashape(self):
+        """
+        Node-locked licenses need to be deactivated otherwise can't be used
+        on another computer.
+        """
+        # Always deactivate after script regardless
+        try:
+            print("NOTE: Deactivating License...")
+            Metashape.License().deactivate()
+        except:
+            pass
+
+        if not Metashape.License().valid:
+            print("NOTE: License deactivated or was not active to begin with.")
+        else:
+            print("ERROR: License was not deactivated; do not delete compute without Deactivating!")
+
     def closeEvent(self, event):
+        self.deactivateMetashape()
         self.closed.emit()
