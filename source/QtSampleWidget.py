@@ -61,8 +61,11 @@ class QtSampleWidget(QWidget):
 
         self.lblWorkingArea = QLabel('Select Working Area')
         self.lblWorkingArea.setMinimumWidth(300)
+
         # Set the alignment to take up the entire width
-        self.lblWorkingArea.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.lblWorkingArea.setAlignment(Qt.AlignLeft |
+                                         Qt.AlignVCenter)
+
         # Set the font to bold
         font = self.lblWorkingArea.font()
         font.setBold(True)
@@ -72,7 +75,12 @@ class QtSampleWidget(QWidget):
         layoutHA.addStretch()
 
         # Create a working area widget, connect only what's needed for point sampling
-        self.working_area_widget = QtWorkingAreaWidget(self)
+        if self.parent().activeviewer.image.map_px_to_mm_factor:
+            scale = float(self.parent().activeviewer.image.map_px_to_mm_factor)
+        else:
+            scale = None
+
+        self.working_area_widget = QtWorkingAreaWidget(self, scale=scale)
         self.working_area_widget.btnChooseArea.clicked.connect(self.parent().enableAreaSelection)
         self.working_area_widget.closed.connect(self.parent().disableAreaSelection)
         self.working_area_widget.closed.connect(self.parent().deleteWorkingAreaWidget)
@@ -83,7 +91,7 @@ class QtSampleWidget(QWidget):
         selection_tool.rectChanged[int, int, int, int].connect(self.working_area_widget.updateArea)
         self.working_area_widget.areaChanged[int, int, int, int].connect(selection_tool.setSelectionRectangle)
 
-        # These are needed, as the working area values are read from the Label boxes
+        # These aren't needed, as the working area values are read from the label boxes
         self.working_area_widget.btnCancel.setVisible(False)
         self.working_area_widget.btnApply.setVisible(False)
         self.working_area_widget.btnDelete.setVisible(False)
@@ -103,6 +111,7 @@ class QtSampleWidget(QWidget):
         layoutHB.addWidget(self.btnCancel)
         layoutHB.addWidget(self.btnOK)
 
+        # Final layout
         layout = QVBoxLayout()
         layout.addLayout(layoutInfo)
         layout.addSpacing(20)

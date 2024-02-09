@@ -3831,7 +3831,13 @@ class TagLab(QMainWindow):
 
                     self.disableSplitScreen()
 
-                    self.working_area_widget = QtWorkingAreaWidget(self)
+                    # Add scaling from active image for conversions
+                    if self.activeviewer.image.map_px_to_mm_factor:
+                        scale = float(self.activeviewer.image.map_px_to_mm_factor)
+                    else:
+                        scale = None
+
+                    self.working_area_widget = QtWorkingAreaWidget(self, scale=scale)
                     self.working_area_widget.btnChooseArea.clicked.connect(self.enableAreaSelection)
                     self.working_area_widget.closed.connect(self.disableAreaSelection)
                     self.working_area_widget.closed.connect(self.deleteWorkingAreaWidget)
