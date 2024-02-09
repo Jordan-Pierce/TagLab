@@ -74,15 +74,14 @@ class QtSampleWidget(QWidget):
         # Create a working area widget, connect only what's needed for point sampling
         self.working_area_widget = QtWorkingAreaWidget(self)
         self.working_area_widget.btnChooseArea.clicked.connect(self.parent().enableAreaSelection)
+        self.working_area_widget.closed.connect(self.parent().disableAreaSelection)
+        self.working_area_widget.closed.connect(self.parent().deleteWorkingAreaWidget)
+        self.working_area_widget.btnDelete.clicked.connect(self.parent().deleteWorkingArea)
         self.working_area_widget.btnApply.clicked.connect(self.parent().setWorkingArea)
         selection_tool = self.parent().activeviewer.tools.tools["SELECTAREA"]
         selection_tool.setAreaStyle("WORKING")
         selection_tool.rectChanged[int, int, int, int].connect(self.working_area_widget.updateArea)
         self.working_area_widget.areaChanged[int, int, int, int].connect(selection_tool.setSelectionRectangle)
-
-        # Initialize the working area to the entire screen
-        wa = [0, 0, self.parent().activeviewer.image.width, self.parent().activeviewer.image.height]
-        self.working_area_widget.updateArea(wa[1], wa[0], wa[2], wa[3])
 
         # These are needed, as the working area values are read from the Label boxes
         self.working_area_widget.btnCancel.setVisible(False)

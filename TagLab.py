@@ -3225,6 +3225,7 @@ class TagLab(QMainWindow):
                     self.samplePointWidget.validchoices.connect(self.samplePointAnn)
                 else:
                     self.closeSamplingWidget()
+                    self.chooseSampling()
 
     @pyqtSlot()
     def closeSamplingWidget(self):
