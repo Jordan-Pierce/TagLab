@@ -15,10 +15,10 @@ class Point(object):
         self.id_item = None
         self.class_name = classname
         self.note = ""
-        #data are commonly called attributes in TagLab interface
+        # data are commonly called attributes in TagLab interface
         self.data = {}
-        self.coordx= coordx
-        self.coordy= coordy
+        self.coordx = coordx
+        self.coordy = coordy
 
         self.cross1_gitem = None
         self.cross2_gitem = None

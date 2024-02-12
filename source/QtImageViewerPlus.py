@@ -1558,9 +1558,9 @@ class QtImageViewerPlus(QtImageViewer):
             blob.qpath_gitem.setBrush(brush)
 
         for annpoint in self.selected_annpoints:
-            # self.undo_data.setAnnPointClass(annpoint, class_name)
+            self.undo_data.setAnnPointClass(annpoint, class_name)
             self.annotations.setAnnPointClass(annpoint, class_name)
-            brush = self.project.classBrushFromName(annpoint)
+            brush = self.project.classBrushFromNamePoint(annpoint)
             annpoint.ellipse_gitem.setBrush(brush)
 
         self.scene.invalidate()
@@ -1585,11 +1585,12 @@ class QtImageViewerPlus(QtImageViewer):
         """
         if annpoint.class_name == class_name:
             return
-        # self.undo_data.setBlobClass(annpoint, class_name)  #data va fatto
+
+        self.undo_data.setAnnPointClass(annpoint, class_name)
         self.annotations.setAnnPointClass(annpoint, class_name)
 
         if annpoint.cross1_gitem:
-            brush = self.project.classBrushFromName(annpoint)
+            brush = self.project.classBrushFromNamePoint(annpoint)
             annpoint.ellipse_gitem.setBrush(brush)
             self.scene.invalidate()
 
@@ -1616,6 +1617,8 @@ class QtImageViewerPlus(QtImageViewer):
         operation = self.undo_data.undo()
         if operation is None:
             return
+
+        # Blobs
 
         for blob in operation['remove']:
             message = "[UNDO][REMOVE] BLOBID={:d} VERSION={:d}".format(blob.id, blob.version)

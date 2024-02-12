@@ -1,6 +1,7 @@
 import datetime
 import json
 import os
+import random
 
 import numpy as np
 import pandas as pd
@@ -298,17 +299,20 @@ class Project(object):
         """
         Convert the list of labels into a labels dictionary.
         """
-
         self.labels = {}
-
         label_names = []
+
         for label in labels:
             label_names.append(label.name)
 
         # 'Empty' key must be be always present
         if not 'Empty' in label_names:
-            self.labels['Empty'] = Label(id='Empty', name='Empty', description=None, fill=[127, 127, 127],
-                                         border=[200, 200, 200], visible=True)
+            self.labels['Empty'] = Label(id='Empty',
+                                         name='Empty',
+                                         description=None,
+                                         fill=[127, 127, 127],
+                                         border=[200, 200, 200],
+                                         visible=True)
 
         for label in labels:
             self.labels[label.name] = label
@@ -327,24 +331,26 @@ class Project(object):
 
         if not blob.class_name in self.labels:
             print("Missing label for " + blob.class_name + ". Creating one.")
-            self.labels[blob.class_name] = Label(blob.class_name, blob.class_name, fill=[255, 0, 0])
+            random_color = [random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)]
+            self.labels[blob.class_name] = Label(blob.class_name, blob.class_name, fill=random_color)
 
         color = self.labels[blob.class_name].fill
         brush = QBrush(QColor(color[0], color[1], color[2], 200))
         return brush
 
-    # def classBrushFromNamePoint(self, annpoint):
-    #     brush = QBrush()
-    #     if annpoint.class_name == "Empty":
-    #         return brush
-    #
-    #     if not annpoint.class_name in self.labels:
-    #         print("Missing label for " + annpoint.class_name + ". Creating one.")
-    #         self.labels[annpoint.class_name] = Label(annpoint.class_name, annpoint.class_name, fill = [255, 0, 0])
-    #
-    #     color = self.labels[annpoint.class_name].fill
-    #     brush = QBrush(QColor(color[0], color[1], color[2], 200))
-    #     return brush
+    def classBrushFromNamePoint(self, annpoint):
+        brush = QBrush()
+        if annpoint.class_name == "Empty":
+            return brush
+
+        if not annpoint.class_name in self.labels:
+            print("Missing label for " + annpoint.class_name + ". Creating one.")
+            random_color = [random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)]
+            self.labels[annpoint.class_name] = Label(annpoint.class_name, annpoint.class_name, fill=random_color)
+
+        color = self.labels[annpoint.class_name].fill
+        brush = QBrush(QColor(color[0], color[1], color[2], 200))
+        return brush
 
     def isLabelVisible(self, id):
         if not id in self.labels:
@@ -360,7 +366,6 @@ class Project(object):
         if self.images is not None:
             if len(self.images) > 1:
                 image_list = self.images
-                #                image_list.sort(key=lambda x: datetime.date.fromisoformat(x.acquisition_date))
                 image_list.sort(key=lambda x: datetime.datetime.strptime(x.acquisition_date, '%Y-%m-%d'))
 
                 self.images = image_list
@@ -413,8 +418,6 @@ class Project(object):
         # update correspondences
         for corr in self.findCorrespondences(image):
             corr.removeBlob(image, blob)
-
-
 
     def updateBlob(self, image, old_blob, new_blob):
 
@@ -495,7 +498,9 @@ class Project(object):
 
         corr = self.getImagePairCorrespondences(img_source_idx, img_target_idx)
         corr.autoMatch(blobs1, blobs2)
-        #corr.autoMatchM(blobs1, blobs2)   # autoMatchM resolves matching taking into account live/dead specimens (class name constraint is removed)
+        # corr.autoMatchM(blobs1, blobs2)
+        # autoMatchM resolves matching taking into account
+        # live/dead specimens (class name constraint is removed)
 
         lines = corr.correspondences + corr.dead + corr.born
 
@@ -510,19 +515,17 @@ class Project(object):
         # corr.updateGenets() moved to genet
 
     def create_labels_table(self, image):
-
-        '''
+        """
         It creates a data table for the label panel.
         If an active image is given, some statistics are added.
-        '''
-
+        """
         dict = {
             'Visibility': np.zeros(len(self.labels), dtype=int),
             'Color': [],
             'Class': [],
             '#R': np.zeros(len(self.labels), dtype=int),
             '#P': np.zeros(len(self.labels), dtype=int),
-            'Coverage': np.zeros(len(self.labels),dtype=float)
+            'Coverage': np.zeros(len(self.labels), dtype=float)
         }
 
         for i, key in enumerate(list(self.labels.keys())):
@@ -533,7 +536,7 @@ class Project(object):
 
             if image is None:
                 count = 0
-                countP= 0
+                countP = 0
                 new_area = 0.0
             else:
                 count, new_area = image.annotations.calculate_perclass_blobs_value(label, image.pixelSize())
@@ -542,8 +545,6 @@ class Project(object):
             dict['#R'][i] = count
             dict['#P'][i] = countP
             dict['Coverage'][i] = new_area
-
-
 
         # create dataframe
         df = pd.DataFrame(dict, columns=['Visibility', 'Color', 'Class', '#R', '#P', 'Coverage'])

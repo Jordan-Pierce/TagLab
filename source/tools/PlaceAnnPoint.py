@@ -12,9 +12,10 @@ class PlaceAnnPoint(Tool):
         super(PlaceAnnPoint, self).__init__(viewerplus)
         self.viewerplus = viewerplus
 
-
     def leftPressed(self, x, y, mods):
+        """
 
+        """
         print('clicked')
 
         if mods == Qt.ShiftModifier:

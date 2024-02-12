@@ -28,8 +28,7 @@ class EditPoints(QObject):
         self.qpath_gitem.setPath(QPainterPath())
         self.points = []
 
-
-    #return true if the first points for a tool
+    # return true if the first points for a tool
     def startDrawing(self, x, y):
 
         first_start = False
@@ -65,7 +64,7 @@ class EditPoints(QObject):
             self.qpath_gitem.setPath(path)
             self.scene.invalidate()
 
-#return false if nothing to undo remains.
+    # return false if nothing to undo remains.
     def undo(self):
         if len(self.points) == 0:
             return False
