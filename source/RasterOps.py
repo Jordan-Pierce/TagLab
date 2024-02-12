@@ -188,13 +188,13 @@ def read_geometry(filename, georef_filename):
 
     return shape_list
 
-
-
 def write_shapefile( project, image, blobs, georef_filename, out_shp):
     """
     https://gis.stackexchange.com/a/52708/8104
     """
-    shapely.speedups.disable()
+    # This is no longer a method
+    # shapely.speedups.disable()
+
     scale_factor = image.pixelSize()
     date = image.acquisition_date
     # load georeference information to use
@@ -208,7 +208,6 @@ def write_shapefile( project, image, blobs, georef_filename, out_shp):
     if working_area is not None:
         # only the blobs inside the working area are considered
         blobs = annotations.calculate_inner_blobs(working_area)
-
 
     # create the list of visible instances
     name_list = []
@@ -311,7 +310,6 @@ def write_shapefile( project, image, blobs, georef_filename, out_shp):
     OGRTypes = {int: ogr.OFTInteger, str: ogr.OFTString, float: ogr.OFTReal}
     defn = outLayer.GetLayerDefn()
     # Create attribute fields according to the data types
-
 
     for key in list(dict.keys()):
 

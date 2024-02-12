@@ -1802,7 +1802,6 @@ class TagLab(QMainWindow):
                 active_annotations.refine_depth_weight = 0.0;
             print("Depth weight: " + str(active_annotations.refine_depth_weight))
 
-
         elif event.key() == Qt.Key_BracketLeft:
             active_annotations.refine_conservative *= 0.9
             print("Conservative: " + str(active_annotations.refine_conservative))
