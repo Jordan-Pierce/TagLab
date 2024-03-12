@@ -183,7 +183,13 @@ install_requires = [
     'shapely',
     'numpy',
     'segment-anything',
-    'qhoptim'
+    'qhoptim',
+
+    # CoralNet Toolbox
+    'Requests',
+    'beautifulsoup4',
+    'selenium',
+    'webdriver_manager',
 ]
 
 if python_sub_v < 9:

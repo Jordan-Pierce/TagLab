@@ -89,7 +89,8 @@ from source.QtShapefileAttributeWidget import QtAttributeWidget
 from source.QtPanelInfo import QtPanelInfo
 from source.Sampler import Sampler
 
-from source.QtiView import QtiView
+from source.QtiView import QtiViewWidget
+from source.QtCoralNetToolbox import CoralNetToolboxWidget
 
 from source import genutils
 from source.Blob import Blob
@@ -1109,11 +1110,16 @@ class TagLab(QMainWindow):
         samplePointsAct.setStatusTip("Sample Points This Map")
         samplePointsAct.triggered.connect(self.chooseSampling)
 
+        openCoralNetToolboxAct = QAction("Open CoralNet-Toolbox...", self)
+        openCoralNetToolboxAct.triggered.connect(self.openCoralNetToolbox)
+
         self.pointmenu = menubar.addMenu("&Points")
         self.pointmenu.setStyleSheet(styleMenu)
-        self.pointmenu.addAction(importPointsAct)
         self.pointmenu.addAction(samplePointsAct)
+        self.pointmenu.addAction(importPointsAct)
         self.pointmenu.addAction(exportPointsAct)
+        self.pointmenu.addSeparator()
+        self.pointmenu.addAction(openCoralNetToolboxAct)
 
         ###### DEM MENU
 
@@ -4580,9 +4586,9 @@ class TagLab(QMainWindow):
         box = QMessageBox()
 
         filters = "CSV (*.csv)"
-        filename, _ = QFileDialog.getOpenFileName(self, "Open A .CSV File", self.taglab_dir, filters)
+        file_name, _ = QFileDialog.getOpenFileName(self, "Open A .CSV File", self.taglab_dir, filters)
 
-        if os.path.exists(filename):
+        if os.path.exists(file_name):
             self.disableSplitScreen()
 
             # Get the current image
@@ -4592,7 +4598,7 @@ class TagLab(QMainWindow):
                 QApplication.setOverrideCursor(Qt.WaitCursor)
 
                 # Open the file, and draw all the points on viewer
-                self.activeviewer.annotations.importCoralNetCSVAnn(filename, channel)
+                self.activeviewer.annotations.importCoralNetCSVAnn(file_name, channel)
                 self.activeviewer.drawAllPointsAnn()
                 # TODO how to update class in DataTable without having to exit TagLab?
                 self.updateDataPanel()
@@ -4639,6 +4645,14 @@ class TagLab(QMainWindow):
             box.exec()
 
         QApplication.restoreOverrideCursor()
+
+    @pyqtSlot()
+    def openCoralNetToolbox(self):
+        """
+
+        """
+        self.coralNetToolbox = CoralNetToolboxWidget(self)
+        self.coralNetToolbox.show()
 
     @pyqtSlot()
     def calculateAreaUsingSlope(self):
@@ -4769,7 +4783,7 @@ class TagLab(QMainWindow):
 
         if self.iViewWidget is None:
             self.btniView.setChecked(True)
-            self.iViewWidget = QtiView()
+            self.iViewWidget = QtiViewWidget()
             self.iViewWidget.setAttribute(Qt.WA_DeleteOnClose)
             self.iViewWidget.setWindowModality(Qt.NonModal)
             self.iViewWidget.btnExit.clicked.connect(self.deleteiViewWidget)

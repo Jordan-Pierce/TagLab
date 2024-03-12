@@ -103,12 +103,12 @@ def create_thumbnail(file_path):
     return file_path, thumbnail
 
 
-class QtiView(QWidget):
+class QtiViewWidget(QWidget):
 
     closed = pyqtSignal()
 
     def __init__(self, parent=None):
-        super(QtiView, self).__init__(parent)
+        super(QtiViewWidget, self).__init__(parent)
 
         # Metashape
         self.metashapeLicense = False
