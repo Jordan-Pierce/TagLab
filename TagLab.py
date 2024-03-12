@@ -1097,13 +1097,13 @@ class TagLab(QMainWindow):
 
         ###### POINT ANN MENU
 
-        importPointsAct = QAction("Import Point Annotations", self)
+        importPointsAct = QAction("Import CoralNet Point Annotations", self)
         importPointsAct.setStatusTip("Import Point Annotations From .CSV")
-        importPointsAct.triggered.connect(self.importPointAnn)
+        importPointsAct.triggered.connect(self.importCoralNetPointAnn)
 
-        exportPointsAct = QAction("Export Point Annotations", self)
+        exportPointsAct = QAction("Export CoralNet Point Annotations", self)
         exportPointsAct.setStatusTip("Export Point Annotations As .CSV")
-        exportPointsAct.triggered.connect(self.exportPointAnn)
+        exportPointsAct.triggered.connect(self.exportCoralNetPointAnn)
 
         samplePointsAct = QAction("Sample Points On This Map", self)
         samplePointsAct.setStatusTip("Sample Points This Map")
@@ -4573,7 +4573,7 @@ class TagLab(QMainWindow):
             QApplication.restoreOverrideCursor()
 
     @pyqtSlot()
-    def importPointAnn(self):
+    def importCoralNetPointAnn(self):
         """
         Import CSV from CoralNet format for each single map. Plot name, x, y, class
         """
@@ -4589,46 +4589,56 @@ class TagLab(QMainWindow):
             channel = self.activeviewer.image.getRGBChannel()
 
             try:
+                QApplication.setOverrideCursor(Qt.WaitCursor)
+
                 # Open the file, and draw all the points on viewer
-                self.activeviewer.annotations.openCSVAnn(filename, channel)
+                self.activeviewer.annotations.importCoralNetCSVAnn(filename, channel)
                 self.activeviewer.drawAllPointsAnn()
+                # TODO how to update class in DataTable without having to exit TagLab?
+                self.updateDataPanel()
+                self.updatePanels()
 
             except Exception as e:
                 box.setText(f"File provided not in CoralNet format!\n{e}")
                 box.exec()
-                return
         else:
             box.setText("File path provided is not valid!")
             box.exec()
-            return
+
+        QApplication.restoreOverrideCursor()
 
     @pyqtSlot()
-    def exportPointAnn(self):
+    def exportCoralNetPointAnn(self):
         """
-        Export CSV in Coralnet format for each single map. Plot name, x, y, class
+        Export CSV in CoralNet format for each single map. Plot name, x, y, class
         """
         box = QMessageBox()
 
-        filters = "CSV (*.csv)"
-        filename, _ = QFileDialog.getSaveFileName(self, "Save A .CSV File", self.taglab_dir, filters)
+        folder_name = QFileDialog.getExistingDirectory(self, "Choose a Folder for the export", "")
+        if not folder_name:
+            return
 
         self.disableSplitScreen()
 
         # Get the current image, and the points for it
         channel = self.activeviewer.image.getRGBChannel()
-        annpoints = self.activeviewer.annotations.annpoints
+        annotations = self.activeviewer.annotations
+        # Get the working area (if none, whole ortho)
+        working_area = self.project.working_area
 
         try:
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+
             # Save all the annotations to a CSV file
-            self.activeviewer.annotations.saveCSVAnn(filename, channel, annpoints)
-            box.setText(f"{len(annpoints)} point annotations saved to {os.path.basename(filename)}!")
+            self.activeviewer.annotations.exportCoralNetCSVAnn(folder_name, channel, annotations, working_area, 1024)
+            box.setText(f"Tiles and point annotations saved to {os.path.basename(folder_name)}")
             box.exec()
-            return
 
         except Exception as e:
             box.setText(f"Failed to export to CoralNet format!")
             box.exec()
-            return
+
+        QApplication.restoreOverrideCursor()
 
     @pyqtSlot()
     def calculateAreaUsingSlope(self):
