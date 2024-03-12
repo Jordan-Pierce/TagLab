@@ -29,12 +29,12 @@ from PyQt5.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, 
 
 from source.QtProgressBarCustom import QtProgressBarCustom
 
+import argparse
 from source.tools.CoralNetToolbox.API import api
 from source.tools.CoralNetToolbox.Upload import upload
 
 
 class CoralNetToolboxWidget(QWidget):
-
     closed = pyqtSignal()
 
     def __init__(self, parent=None):
@@ -218,13 +218,50 @@ class CoralNetToolboxWidget(QWidget):
         """
         self.username = self.editUsername.text()
         self.password = self.editPassword.text()
-        self.source_id_1 = self.editSourceID1.text()
-        self.source_id_2 = self.editSourceID2.text()
+        self.source_id_1 = int(self.editSourceID1.text())
+        self.source_id_2 = int(self.editSourceID2.text())
         self.output_folder = self.editOutputFolder.text()
 
         # Cache the Username and Password as local variables (after authentication)?
         os.environ["CORALNET_USERNAME"] = self.username
         os.environ["CORALNET_PASSWORD"] = self.password
+
+        # 1.) Export point annotations and tiles from activeviewer
+        channel = self.parent().activeviewer.image.getRGBChannel()
+        annotations = self.parent().activeviewer.annotations
+        working_area = self.parent().project.working_area
+        output_dir, csv_file = self.parent().activeviewer.annotations.exportCoralNetCSVAnn(self.output_folder,
+                                                                                           channel,
+                                                                                           annotations,
+                                                                                           working_area,
+                                                                                           1024)
+        # 2.) Use upload function to upload just the images in the tiles/ folder
+        args = argparse.ArgumentParser().parse_args()
+        args.username = self.username
+        args.password = self.password
+        args.source_id = self.source_id_1
+        args.images = f"{output_dir}/tiles"
+        args.prefix = ""
+        args.annotations = ""
+        args.labelset = ""
+        args.headless = True
+        # Run the upload function
+        upload(args)
+
+        # 3.) Use api function and point annotations to get predictions for uploaded tiles
+        args = argparse.ArgumentParser().parse_args()
+        args.username = self.username
+        args.password = self.password
+        args.points = csv_file
+        args.prefix = ""
+        args.source_id_1 = self.source_id_1
+        args.source_id_2 = self.source_id_2
+        args.output_dir = output_dir
+        # Run the upload function
+        args = api(args)
+
+        # 4.) Import predictions
+        self.parent().activeviewer.annotations.importCoralNetCSVAnn(args.predictions, channel)
 
         print("Done.")
         self.close()

@@ -1203,6 +1203,8 @@ class Annotation(QObject):
         df = pd.DataFrame(df, columns=['Plot', 'Name', 'Row', 'Column', 'Label', 'Point_ID', 'X', 'Y'])
         df.to_csv(csv_file)
 
+        return output_dir, csv_file
+
     def getAnnPointsWithinBox(self, plot_number, tile_name, box):
         """
         Simple function to get the point annotations within a work area for CoralNet.
