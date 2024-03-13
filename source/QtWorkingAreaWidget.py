@@ -184,7 +184,7 @@ class QtWorkingAreaWidget(QWidget):
         layout.addLayout(buttons_layout)
         self.setLayout(layout)
 
-        self.setWindowTitle("Working area")
+        self.setWindowTitle("Working Area")
         self.setWindowFlags(Qt.Window |
                             Qt.CustomizeWindowHint |
                             Qt.WindowCloseButtonHint |
@@ -212,10 +212,10 @@ class QtWorkingAreaWidget(QWidget):
             scale_factor_mm_per_px = self.scale
 
             # Convert pixel values to meters using the scale factor
-            meter_top = pixel_top * scale_factor_mm_per_px / 1000.0
-            meter_left = pixel_left * scale_factor_mm_per_px / 1000.0
-            meter_width = pixel_width * scale_factor_mm_per_px / 1000.0
-            meter_height = pixel_height * scale_factor_mm_per_px / 1000.0
+            meter_top = round(pixel_top * scale_factor_mm_per_px / 1000.0, 2)
+            meter_left = round(pixel_left * scale_factor_mm_per_px / 1000.0, 2)
+            meter_width = round(pixel_width * scale_factor_mm_per_px / 1000.0, 2)
+            meter_height = round(pixel_height * scale_factor_mm_per_px / 1000.0, 2)
 
             # Update metric version values
             self.edit_Y_m.setText(str(meter_top))
@@ -258,6 +258,11 @@ class QtWorkingAreaWidget(QWidget):
         self.edit_W.setText("")
         self.edit_H.setText("")
 
+        self.edit_X_m.setText("")
+        self.edit_Y_m.setText("")
+        self.edit_W_m.setText("")
+        self.edit_H_m.setText("")
+
     def getWorkingArea(self):
         """
 
@@ -276,5 +281,3 @@ class QtWorkingAreaWidget(QWidget):
             print("CONVERSION ERROR")
 
         return x, y, w, h
-
-

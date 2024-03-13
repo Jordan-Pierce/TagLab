@@ -17,15 +17,18 @@ class QtSampleWidget(QWidget):
     def __init__(self, parent=None):
         super(QtSampleWidget, self).__init__(parent)
 
+        # Parameters
         self.choosednumber = None
         self.offset = None
+        self.working_area = []
 
+        # Style for the widget
         self.setStyleSheet("background-color: rgb(40,40,40); color: white")
 
+        # Samplig method (combobox)
         layoutHM = QHBoxLayout()
 
         self.lblMethod = QLabel("Sampling Method: ")
-
         self.comboMethod = QComboBox()
         self.comboMethod.setMinimumWidth(300)
         self.comboMethod.addItem('Grid Sampling')
@@ -34,7 +37,9 @@ class QtSampleWidget(QWidget):
         layoutHM.addWidget(self.lblMethod)
         layoutHM.addWidget(self.comboMethod)
 
+        # Points
         layoutHN = QHBoxLayout()
+
         self.lblNumber = QLabel("Number Of Points: ")
         self.editNumber = QLineEdit()
         self.editNumber.setPlaceholderText("Type Number Of Point")
@@ -42,7 +47,9 @@ class QtSampleWidget(QWidget):
         layoutHN.addWidget(self.lblNumber)
         layoutHN.addWidget(self.editNumber)
 
+        # Offset
         layoutHOFF = QHBoxLayout()
+
         self.lblOFF = QLabel("Offset (px): ")
         self.editOFF = QLineEdit()
         self.editOFF.setPlaceholderText("Type pixels of offset")
@@ -56,50 +63,7 @@ class QtSampleWidget(QWidget):
         layoutInfo.addLayout(layoutHN)
         layoutInfo.addLayout(layoutHOFF)
 
-        # Create a stacked widget to hold Select Area Widget
-        layoutHA = QHBoxLayout()
-
-        self.lblWorkingArea = QLabel('Select Working Area')
-        self.lblWorkingArea.setMinimumWidth(300)
-
-        # Set the alignment to take up the entire width
-        self.lblWorkingArea.setAlignment(Qt.AlignLeft |
-                                         Qt.AlignVCenter)
-
-        # Set the font to bold
-        font = self.lblWorkingArea.font()
-        font.setBold(True)
-        self.lblWorkingArea.setFont(font)
-        layoutHA.addWidget(self.lblWorkingArea)
-        layoutHA.setAlignment(Qt.AlignCenter)
-        layoutHA.addStretch()
-
-        # Create a working area widget, connect only what's needed for point sampling
-        if self.parent().activeviewer.image.map_px_to_mm_factor:
-            scale = float(self.parent().activeviewer.image.map_px_to_mm_factor)
-        else:
-            scale = None
-
-        self.working_area_widget = QtWorkingAreaWidget(self, scale=scale)
-        self.working_area_widget.btnChooseArea.clicked.connect(self.parent().enableAreaSelection)
-        self.working_area_widget.closed.connect(self.parent().disableAreaSelection)
-        self.working_area_widget.closed.connect(self.parent().deleteWorkingAreaWidget)
-        self.working_area_widget.btnDelete.clicked.connect(self.parent().deleteWorkingArea)
-        self.working_area_widget.btnApply.clicked.connect(self.parent().setWorkingArea)
-        selection_tool = self.parent().activeviewer.tools.tools["SELECTAREA"]
-        selection_tool.setAreaStyle("WORKING")
-        selection_tool.rectChanged[int, int, int, int].connect(self.working_area_widget.updateArea)
-        self.working_area_widget.areaChanged[int, int, int, int].connect(selection_tool.setSelectionRectangle)
-
-        # These aren't needed, as the working area values are read from the label boxes
-        self.working_area_widget.btnCancel.setVisible(False)
-        self.working_area_widget.btnApply.setVisible(False)
-        self.working_area_widget.btnDelete.setVisible(False)
-
-        # Stacked widget contains the working area widget
-        self.stacked_widget = QStackedWidget(self)
-        self.stacked_widget.addWidget(self.working_area_widget)
-
+        # Buttons
         layoutHB = QHBoxLayout()
 
         self.btnCancel = QPushButton("Cancel")
@@ -115,8 +79,6 @@ class QtSampleWidget(QWidget):
         layout = QVBoxLayout()
         layout.addLayout(layoutInfo)
         layout.addSpacing(20)
-        layout.addLayout(layoutHA)
-        layout.addWidget(self.stacked_widget)
         layout.addLayout(layoutHB)
         self.setLayout(layout)
 
@@ -146,5 +108,4 @@ class QtSampleWidget(QWidget):
 
     def closeEvent(self, event):
         self.closewidget.emit()
-        self.working_area_widget.closeEvent(event)
         super(QtSampleWidget, self).closeEvent(event)

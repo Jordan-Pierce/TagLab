@@ -645,10 +645,10 @@ class Annotation(QObject):
                      min(box[3], imagebox[3])]
 
             subimage = image[range[0] - imagebox[0]:range[2] - imagebox[0],
-                             range[1] - imagebox[1]:range[3] - imagebox[1]]
+                       range[1] - imagebox[1]:range[3] - imagebox[1]]
 
             submask = mask[range[0] - box[0]:range[2] - box[0],
-                           range[1] - box[1]:range[3] - box[1]]
+                      range[1] - box[1]:range[3] - box[1]]
 
             # use the binary mask to assign a color
             subimage[submask] = rgb
@@ -1054,6 +1054,7 @@ class Annotation(QObject):
         """
         Opens a CoralNet format CSV file, expecting at a minimum: Name, Row, Column, Label.
         Additional fields include the Machine confidence N (float), and Machine Suggestion N (str).
+        If the CSV file contains TagLab exported Tiles, it will modify the coordinates accordingly.
         """
         # Get the image basename
         _, image_name = os.path.split(channel.filename)
@@ -1085,7 +1086,7 @@ class Annotation(QObject):
             coordx = r['Column']
             coordy = r['Row']
             class_name = r['Label']
-            pidx = -1
+            pidx = None
 
             # If the coordinates don't fall within the image, don't add
             if coordx < 0 or coordx > width or coordy < 0 or coordy > height:
@@ -1103,8 +1104,9 @@ class Annotation(QObject):
                 coordx += offx
                 coordy += offy
 
-                if 'Point_ID' in r:
-                    pidx = r['Point_ID']
+            # If there's a point ID, get it
+            if 'TagLab_PID' in r:
+                pidx = r['TagLab_PID']
 
             # To contain any additional attributes
             point_data = {}
@@ -1117,15 +1119,13 @@ class Annotation(QObject):
                 class_name = point_data['Machine suggestion 1']
 
             # Look for an existing point id and update the class label
-            if pidx >= 0:
-                for idx, point_ann in enumerate(self.annpoints):
-                    if point_ann.id == pidx:
-                        point_ann.class_name = class_name
-                        point_ann.data.update(point_data)
-                        point_ann.notes = '\n'.join([f"{key}: {value}" for key, value in point_data.items()])
-                        self.annpoints[idx] = point_ann
-                        break
-
+            if pidx in [a.id for a in self.annpoints]:
+                idx = [a.id for a in self.annpoints].index(pidx)
+                point_ann = self.annpoints[idx]
+                point_ann.class_name = class_name
+                point_ann.data.update(point_data)
+                point_ann.notes = '\n'.join([f"{key}: {value}" for key, value in point_data.items()])
+                self.annpoints[idx] = point_ann
             else:
                 # Create a new point object
                 point_ann = Point(coordx, coordy, class_name, self.getFreePointId())
@@ -1134,10 +1134,58 @@ class Annotation(QObject):
                 # Register the point
                 self.addPoint(point_ann)
 
-    def exportCoralNetCSVAnn(self, output_dir, channel, annotations, working_area, tile_size=1024):
+    def exportCoralNetCSVAnn(self, output_dir, channel, annotations, working_area):
         """
         The function exports a CoralNet formatted CSV file (Name, Row, Column, Label) for all points
-        in the work area. The points contain both tiled and original XY coordinates.
+        in user specified work area. No tiles are made, and point locations are based on the current map
+        coordinates. See exportCoralNetData for tile handling.
+        """
+        # Get the image basename
+        _, image_name = os.path.split(channel.filename)
+        basename = os.path.basename(image_name).split('.')[0]
+
+        # Output CSV file
+        csv_file = f"{output_dir}/{basename}_exported_points.csv"
+
+        # Selected working area
+        if working_area:
+            top = working_area[0]
+            left = working_area[1]
+            right = left + working_area[2]
+            bottom = top + working_area[3]
+        else:
+            top = 0
+            left = 0
+            bottom = channel.qimage.height()
+            right = channel.qimage.width()
+
+        # Loop through point annotations, find those inside the box
+        annpoints = []
+
+        for annpoint in annotations.annpoints:
+
+            x = annpoint.coordx
+            y = annpoint.coordy
+            label = annpoint.class_name
+            pidx = annpoint.id
+
+            # If inside the box, add to subset
+            if left <= x <= right and top <= y <= bottom:
+                annpoints.append([os.path.basename(image_name), pidx, y, x, label])
+
+        if annpoints:
+            df = pd.DataFrame(annpoints, columns=['Name', 'TagLab_PID', 'Row', 'Column', 'Label'])
+            df.to_csv(csv_file)
+        else:
+            raise Exception("No points found in sampling area.")
+
+        return csv_file
+
+    def exportCoralNetData(self, output_dir, channel, annotations, working_area, tile_size=1024):
+        """
+        The function exports a CoralNet formatted CSV file (Name, Row, Column, Label) for all points
+        in user specified work area. Tiles are made, and point locations are based on the tile
+        coordinates. See exportCoralNetCSVAnn for non-tiled points.
         """
         # Get the image basename
         _, image_name = os.path.split(channel.filename)
@@ -1167,6 +1215,11 @@ class Annotation(QObject):
         w = right - left
         h = bottom - top
 
+        # Check if working area is smaller than tile size
+        if w < tile_size and h < tile_size:
+            raise Exception(f"Working area is too small, must be at least {tile_size} x {tile_size}")
+
+        # The number of tiles, and their size
         w_step = int(w / tile_size)
         h_step = int(h / tile_size)
         w_size = int(w / w_step) + 1
@@ -1200,8 +1253,11 @@ class Annotation(QObject):
                     # Add to dataframe
                     df.extend(ann_points_in_box)
 
-        df = pd.DataFrame(df, columns=['Plot', 'Name', 'Row', 'Column', 'Label', 'Point_ID', 'X', 'Y'])
-        df.to_csv(csv_file)
+        if df:
+            df = pd.DataFrame(df, columns=['Plot', 'Name', 'Row', 'Column', 'Label', 'TagLab_PID', 'X', 'Y'])
+            df.to_csv(csv_file)
+        else:
+            raise Exception("No points found in sampling area.")
 
         return output_dir, csv_file
 
@@ -1226,7 +1282,7 @@ class Annotation(QObject):
             pidx = point.id
 
             # If inside the box, add to subset
-            if left <= x < right and top <= y < bottom:
+            if left <= x <= right and top <= y <= bottom:
                 # Tile space coordinates
                 tile_row = y - top
                 tile_col = x - left

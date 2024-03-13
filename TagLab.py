@@ -224,10 +224,13 @@ class TagLab(QMainWindow):
         self.btnAssign = self.newButton("bucket.png", "Assign class", flatbuttonstyle1, self.assign)
         self.btnEditBorder = self.newButton("edit.png", "Edit border", flatbuttonstyle1, self.editBorder)
         self.btnCut = self.newButton("scissors.png", "Cut segmentation", flatbuttonstyle1, self.cut)
-        self.btnFreehand = self.newButton("pencil.png", "Freehand segmentation", flatbuttonstyle1, self.freehandSegmentation)
+        self.btnFreehand = self.newButton("pencil.png", "Freehand segmentation", flatbuttonstyle1,
+                                          self.freehandSegmentation)
         self.btnCreateCrack = self.newButton("crack.png", "Create crack", flatbuttonstyle1, self.createCrack)
-        self.btnWatershed = self.newButton("brush.png", "Watershed segmentation", flatbuttonstyle1, self.watershedSegmentation)
-        self.btnBricksSegmentation = self.newButton("brick.png", "Bricks segmentation", flatbuttonstyle2, self.bricksSegmentation)
+        self.btnWatershed = self.newButton("brush.png", "Watershed segmentation", flatbuttonstyle1,
+                                           self.watershedSegmentation)
+        self.btnBricksSegmentation = self.newButton("brick.png", "Bricks segmentation", flatbuttonstyle2,
+                                                    self.bricksSegmentation)
 
         # Split blob operation removed from the toolbar
         # self.btnSplitBlob   = self.newButton("split.png",    "Split Blob",            flatbuttonstyle1, self.splitBlob)
@@ -240,7 +243,8 @@ class TagLab(QMainWindow):
         # self.btnSamInteractive = self.newButton("saminteractive2.png", "Box and clicks segmentation", flatbuttonstyle2, self.saminteractive)
         # self.btnSam = self.newButton("sam.png", "Segment everything", flatbuttonstyle2, self.sam)
 
-        self.btnAutoClassification = self.newButton("auto.png", "Fully auto semantic segmentation", flatbuttonstyle2, self.selectClassifier)
+        self.btnAutoClassification = self.newButton("auto.png", "Fully auto semantic segmentation", flatbuttonstyle2,
+                                                    self.selectClassifier)
 
         # Additional features
         self.btnSAMPredictor = self.newButton("sam_pred.png", "SAM Predictor", flatbuttonstyle2, self.samPredictor)
@@ -252,13 +256,15 @@ class TagLab(QMainWindow):
         self.labelSeparator = QLabel()
         self.labelSeparator.setPixmap(self.pxmapSeparator.scaled(QSize(35, 30)))
         self.btnCreateGrid = self.newButton("grid.png", "Create grid", flatbuttonstyle1, self.createGrid)
-        self.btnGrid = self.newButton("grid-edit.png", "Active/disactive grid operations", flatbuttonstyle1, self.toggleGrid)
+        self.btnGrid = self.newButton("grid-edit.png", "Active/disactive grid operations", flatbuttonstyle1,
+                                      self.toggleGrid)
         self.pxmapSeparator2 = QPixmap("icons/separator.png")
         self.labelSeparator2 = QLabel()
         self.labelSeparator2.setPixmap(self.pxmapSeparator2.scaled(QSize(35, 30)))
 
         self.btnSplitScreen = self.newButton("split.png", "Split screen", flatbuttonstyle1, self.toggleComparison)
-        self.btnAutoMatch = self.newButton("automatch.png", "Compute automatic matches", flatbuttonstyle1, self.autoCorrespondences)
+        self.btnAutoMatch = self.newButton("automatch.png", "Compute automatic matches", flatbuttonstyle1,
+                                           self.autoCorrespondences)
         self.btnMatch = self.newButton("manualmatch.png", "Add manual matches ", flatbuttonstyle1, self.matchTool)
 
         # NOTE: Automatic matches button is not checkable
@@ -431,7 +437,7 @@ class TagLab(QMainWindow):
         self.labelViewHeightInfo.setMinimumWidth(70)
 
         layout_header = QHBoxLayout()
-        layout_header.addWidget(QLabel("Map:  "))
+        layout_header.addWidget(QLabel(""))
         layout_header.addWidget(self.comboboxSourceImage)
         layout_header.addWidget(self.comboboxTargetImage)
         layout_header.addStretch()
@@ -956,9 +962,6 @@ class TagLab(QMainWindow):
         regionAttributesAct = QAction("Region Attributes...", self)
         regionAttributesAct.triggered.connect(self.editRegionAttributes)
 
-        setWorkingAreaAct = QAction("Set Working Area", self)
-        setWorkingAreaAct.triggered.connect(self.selectWorkingArea)
-
         ### IMPORT
 
         appendAct = QAction("Add Another Project", self)
@@ -1088,8 +1091,6 @@ class TagLab(QMainWindow):
         self.projectmenu.addAction(newMapAct)
         self.projectmenu.addAction(projectEditorAct)
         self.projectmenu.addSeparator()
-        self.projectmenu.addAction(setWorkingAreaAct)
-        self.projectmenu.addSeparator()
         self.projectmenu.addAction(alignToolAct)
         self.projectmenu.addSeparator()
         self.projectmenu.addAction(createDicAct)
@@ -1097,6 +1098,13 @@ class TagLab(QMainWindow):
         self.projectmenu.addAction(regionAttributesAct)
 
         ###### POINT ANN MENU
+
+        setWorkingAreaAct = QAction("Set / Delete Working Area", self)
+        setWorkingAreaAct.triggered.connect(self.selectWorkingArea)
+
+        samplePointsAct = QAction("Sample Points On Map / Area", self)
+        samplePointsAct.setStatusTip("Sample Points")
+        samplePointsAct.triggered.connect(self.chooseSampling)
 
         importPointsAct = QAction("Import CoralNet Point Annotations", self)
         importPointsAct.setStatusTip("Import Point Annotations From .CSV")
@@ -1106,15 +1114,12 @@ class TagLab(QMainWindow):
         exportPointsAct.setStatusTip("Export Point Annotations As .CSV")
         exportPointsAct.triggered.connect(self.exportCoralNetPointAnn)
 
-        samplePointsAct = QAction("Sample Points On This Map", self)
-        samplePointsAct.setStatusTip("Sample Points This Map")
-        samplePointsAct.triggered.connect(self.chooseSampling)
-
         openCoralNetToolboxAct = QAction("Open CoralNet-Toolbox...", self)
         openCoralNetToolboxAct.triggered.connect(self.openCoralNetToolbox)
 
         self.pointmenu = menubar.addMenu("&Points")
         self.pointmenu.setStyleSheet(styleMenu)
+        self.pointmenu.addAction(setWorkingAreaAct)
         self.pointmenu.addAction(samplePointsAct)
         self.pointmenu.addAction(importPointsAct)
         self.pointmenu.addAction(exportPointsAct)
@@ -3248,22 +3253,25 @@ class TagLab(QMainWindow):
         Gets the parameters from the QtSamplerWidget, calls the Sampler class functions,
         creates points, displays to users as unlabeled points.
         """
-        QApplication.setOverrideCursor(Qt.WaitCursor)
-
-        choosedmethod = self.samplePointWidget.comboMethod.currentText()
-        choosedpointnumber = self.samplePointWidget.choosednumber
+        # After the SampleWidget is run, values are passed back
+        choosed_method = self.samplePointWidget.comboMethod.currentText()
+        choosed_point_number = self.samplePointWidget.choosednumber
         offset = self.samplePointWidget.offset
-        wa = self.samplePointWidget.working_area_widget.getWorkingArea()
 
-        if wa is not None:
-            area = [wa[1], wa[0], wa[2], wa[3]]
+        # Gets the global working area
+        work_area = self.project.working_area
+
+        # Check the working area, if none, apply to whole ortho
+        if work_area is not None:
+            sample_area = work_area
         else:
-            area = [0, 0, self.activeviewer.image.width, self.activeviewer.image.height]
+            sample_area = [0, 0, self.activeviewer.image.width, self.activeviewer.image.height]
 
         # Get the current map
         image = self.activeviewer.image
-        # Create sampler object, sample points
-        sampler = Sampler(image, area, choosedmethod, choosedpointnumber, offset)
+
+        # Create sampler object, do the actual sampling
+        sampler = Sampler(image, sample_area, choosed_method, choosed_point_number, offset)
         points = sampler.generate()
 
         # Show progress bar
@@ -3277,8 +3285,8 @@ class TagLab(QMainWindow):
         # Loop through each point and add to scene
         for p_idx, point in enumerate(points):
             id = self.activeviewer.annotations.getFreePointId()
-            newpoint = Point(int(point[0]), int(point[1]), 'Empty', id)
-            self.activeviewer.image.annotations.addPoint(newpoint)
+            new_point = Point(int(point[0]), int(point[1]), 'Empty', id)
+            self.activeviewer.image.annotations.addPoint(new_point)
             # Update progress bar
             progress_bar.setProgress(float(p_idx / len(points) * 100.0))
             QApplication.processEvents()
@@ -3290,8 +3298,6 @@ class TagLab(QMainWindow):
 
         self.closeSamplingWidget()
         self.activeviewer.drawAllPointsAnn()
-
-        QApplication.restoreOverrideCursor()
 
     @pyqtSlot()
     def editProject(self):
@@ -4581,7 +4587,9 @@ class TagLab(QMainWindow):
     @pyqtSlot()
     def importCoralNetPointAnn(self):
         """
-        Import CSV from CoralNet format for each single map. Plot name, x, y, class
+        Imports all point annotations to current map from a CSV file in CoralNet format.
+        This will automatically check the Name column and import only point annotations for it
+        (either in the original orthomosaic or tile coordinate space).
         """
         box = QMessageBox()
 
@@ -4603,6 +4611,8 @@ class TagLab(QMainWindow):
                 # TODO how to update class in DataTable without having to exit TagLab?
                 self.updateDataPanel()
                 self.updatePanels()
+                box.setText(f"Point annotations imported successfully!")
+                box.exec()
 
             except Exception as e:
                 box.setText(f"File provided not in CoralNet format!\n{e}")
@@ -4616,32 +4626,41 @@ class TagLab(QMainWindow):
     @pyqtSlot()
     def exportCoralNetPointAnn(self):
         """
-        Export CSV in CoralNet format for each single map. Plot name, x, y, class
+        Exports just a CSV in CoralNet format for all the point annotations in the
+        user specified work area.
         """
         box = QMessageBox()
 
+        # User specifies output folder
         folder_name = QFileDialog.getExistingDirectory(self, "Choose a Folder for the export", "")
+
         if not folder_name:
             return
 
+        # Force split screen off
         self.disableSplitScreen()
 
         # Get the current image, and the points for it
         channel = self.activeviewer.image.getRGBChannel()
         annotations = self.activeviewer.annotations
-        # Get the working area (if none, whole ortho)
+
+        # Get the working area (if none, whole ortho is used)
         working_area = self.project.working_area
 
         try:
             QApplication.setOverrideCursor(Qt.WaitCursor)
 
-            # Save all the annotations to a CSV file
-            self.activeviewer.annotations.exportCoralNetCSVAnn(folder_name, channel, annotations, working_area, 1024)
-            box.setText(f"Tiles and point annotations saved to {os.path.basename(folder_name)}")
+            # Save all the annotations to a CSV file in the directory choosen
+            csv_file = self.activeviewer.annotations.exportCoralNetCSVAnn(folder_name,
+                                                                          channel,
+                                                                          annotations,
+                                                                          working_area)
+
+            box.setText(f"Exported data to {os.path.basename(csv_file)}")
             box.exec()
 
         except Exception as e:
-            box.setText(f"Failed to export to CoralNet format!")
+            box.setText(f"Failed to export data to CoralNet format! {e}")
             box.exec()
 
         QApplication.restoreOverrideCursor()
@@ -4651,8 +4670,11 @@ class TagLab(QMainWindow):
         """
 
         """
-        self.coralNetToolbox = CoralNetToolboxWidget(self)
-        self.coralNetToolbox.show()
+        try:
+            self.coralNetToolbox = CoralNetToolboxWidget(self)
+            self.coralNetToolbox.show()
+        except Exception as e:
+            print(f"{e}")
 
     @pyqtSlot()
     def calculateAreaUsingSlope(self):

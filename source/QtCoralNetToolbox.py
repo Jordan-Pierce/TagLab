@@ -18,20 +18,37 @@
 # for more details.
 
 import os
-from concurrent.futures import ThreadPoolExecutor
+import sys
+from io import TextIOBase
 
-from PyQt5.QtCore import Qt, QSize, pyqtSlot, pyqtSignal, QPoint
-from PyQt5.QtGui import QImage, QPixmap, QTransform, QFont, QImageReader, QPainter, QColor
-from PyQt5.QtWidgets import QStackedWidget, QTabWidget, QScrollArea
+from PyQt5.QtCore import Qt, pyqtSlot, pyqtSignal
+from PyQt5.QtWidgets import QWidget, QFileDialog, QApplication, QMessageBox, QTextEdit
 from PyQt5.QtWidgets import QSizePolicy, QLineEdit, QLabel, QPushButton, QHBoxLayout, QVBoxLayout
-from PyQt5.QtWidgets import QGroupBox, QWidget, QFileDialog, QComboBox, QApplication, QMessageBox
-from PyQt5.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QGraphicsSceneWheelEvent
 
 from source.QtProgressBarCustom import QtProgressBarCustom
 
 import argparse
 from source.tools.CoralNetToolbox.API import api
 from source.tools.CoralNetToolbox.Upload import upload
+from source.tools.CoralNetToolbox.Browser import authenticate
+
+
+class ConsoleOutput(TextIOBase):
+    def __init__(self, widget):
+        super().__init__()
+        self.widget = widget
+
+    def write(self, string):
+        self.widget.append(string)
+
+
+class ConsoleWidget(QTextEdit):
+    def __init__(self, parent=None):
+        super(ConsoleWidget, self).__init__(parent)
+        self.setReadOnly(True)
+        self._console_output = ConsoleOutput(self)
+        sys.stdout = self._console_output
+        sys.stderr = self._console_output
 
 
 class CoralNetToolboxWidget(QWidget):
@@ -46,6 +63,9 @@ class CoralNetToolboxWidget(QWidget):
         self.source_id_1 = ""
         self.source_id_2 = ""
         self.output_folder = ""
+        self.tiles_folder = ""
+        self.annotations_file = ""
+        self.predictions_file = ""
 
         # --------------------
         # The window settings
@@ -66,6 +86,7 @@ class CoralNetToolboxWidget(QWidget):
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
         self.setSizePolicy(sizePolicy)
+        self.setMinimumSize(800, 600)
 
         self.setStyleSheet("background-color: rgba(60,60,65,100); color: white")
 
@@ -170,17 +191,26 @@ class CoralNetToolboxWidget(QWidget):
         layoutButtons.addWidget(self.btnExit)
 
         # -----------------------
+        # Console Widget
+        # -----------------------
+        self.console_widget = ConsoleWidget()
+        self.console_widget.setFixedHeight(200)
+
+        # -----------------------
         # Final Layout order
         # -----------------------
         layoutV = QVBoxLayout()
 
+        # Add your existing layout elements
         layoutV.addLayout(layoutUsername)
         layoutV.addLayout(layoutPassword)
         layoutV.addLayout(layoutSourceID1)
         layoutV.addLayout(layoutSourceID2)
         layoutV.addLayout(layoutOutputFolder)
-        layoutV.setSpacing(3)
         layoutV.addLayout(layoutButtons)
+
+        # Add console widget to the layout
+        layoutV.addWidget(self.console_widget)
 
         self.setLayout(layoutV)
 
@@ -216,55 +246,164 @@ class CoralNetToolboxWidget(QWidget):
         """
 
         """
+        # Good or Bad box
+        msgBox = QMessageBox()
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+
         self.username = self.editUsername.text()
         self.password = self.editPassword.text()
         self.source_id_1 = int(self.editSourceID1.text())
         self.source_id_2 = int(self.editSourceID2.text())
         self.output_folder = self.editOutputFolder.text()
 
-        # Cache the Username and Password as local variables (after authentication)?
-        os.environ["CORALNET_USERNAME"] = self.username
-        os.environ["CORALNET_PASSWORD"] = self.password
+        try:
+            authenticate(self.username, self.password)
 
-        # 1.) Export point annotations and tiles from activeviewer
+            # Cache the Username and Password as local variables
+            os.environ["CORALNET_USERNAME"] = self.username
+            os.environ["CORALNET_PASSWORD"] = self.password
+
+        except Exception as e:
+            QApplication.restoreOverrideCursor()
+            msgBox.setText("Invalid username or password")
+            msgBox.exec()
+            return
+
+        # # Show progress bar
+        # progress_bar = QtProgressBarCustom()
+        # progress_bar.setWindowFlags(Qt.ToolTip | Qt.CustomizeWindowHint)
+        # progress_bar.setWindowModality(Qt.NonModal)
+        # progress_bar.show()
+
+        try:
+            # progress_bar.setMessage("Exporting data...")
+            # progress_bar.setProgress(25)
+            # QApplication.processEvents()
+            # Export point annotations and tiles from
+            # active viewer based on user defined area
+            self.taglabExport()
+
+            # progress_bar.setMessage("Uploading data...")
+            # progress_bar.setProgress(50)
+            # QApplication.processEvents()
+            # Use upload function to upload just
+            # the images in the tiles folder
+            self.coralnetUpload()
+
+            # progress_bar.setMessage("Accessing API...")
+            # progress_bar.setProgress(75)
+            # QApplication.processEvents()
+            # Use api function and point annotations
+            # to get predictions for uploaded tiles
+            self.coralnetAPI()
+
+            # progress_bar.setMessage("Importing data...")
+            # progress_bar.setProgress(99)
+            # QApplication.processEvents()
+            # Import predictions back to TagLab
+            self.taglabImport()
+
+        except Exception as e:
+            msgBox.setText(f"{e}")
+            msgBox.exec()
+
+        # progress_bar.close()
+        # del progress_bar
+        # progress_bar = None
+
+        QApplication.restoreOverrideCursor()
+        self.close()
+
+    def coralnetAuthenticate(self):
+        """
+
+        """
+        try:
+            # Make sure the username and password are correct
+            # before trying to run the entire process
+            authenticate(self.username, self.password)
+        except Exception as e:
+            raise Exception(f"CoralNet authentication failed. {e}")
+
+    def taglabExport(self):
+        """
+        Exports the points and tiles from the user specified area in the output directory;
+        returns the path to the CSV file.
+        """
+        # Get the channel, annotations and working area from project
         channel = self.parent().activeviewer.image.getRGBChannel()
         annotations = self.parent().activeviewer.annotations
         working_area = self.parent().project.working_area
-        output_dir, csv_file = self.parent().activeviewer.annotations.exportCoralNetCSVAnn(self.output_folder,
-                                                                                           channel,
-                                                                                           annotations,
-                                                                                           working_area,
-                                                                                           1024)
-        # 2.) Use upload function to upload just the images in the tiles/ folder
+
+        # Export the data
+        output_dir, csv_file = self.parent().activeviewer.annotations.exportCoralNetData(self.output_folder,
+                                                                                         channel,
+                                                                                         annotations,
+                                                                                         working_area,
+                                                                                         1024)
+        if os.path.exists(csv_file):
+            self.output_folder = f"{output_dir}"
+            self.tiles_folder = f"{output_dir}/tiles"
+            self.annotations_file = csv_file
+        else:
+            raise Exception("TagLab annotations could not be exported")
+
+    def coralnetUpload(self):
+        """
+
+        """
         args = argparse.ArgumentParser().parse_args()
         args.username = self.username
         args.password = self.password
         args.source_id = self.source_id_1
-        args.images = f"{output_dir}/tiles"
+        args.images = self.tiles_folder
         args.prefix = ""
         args.annotations = ""
         args.labelset = ""
         args.headless = True
-        # Run the upload function
-        upload(args)
 
-        # 3.) Use api function and point annotations to get predictions for uploaded tiles
+        try:
+            # Run the upload function
+            upload(args)
+        except Exception as e:
+            raise Exception(f"CoralNet upload failed. {e}")
+
+    def coralnetAPI(self):
+        """
+
+        """
         args = argparse.ArgumentParser().parse_args()
         args.username = self.username
         args.password = self.password
-        args.points = csv_file
+        args.points = self.annotations_file
         args.prefix = ""
         args.source_id_1 = self.source_id_1
         args.source_id_2 = self.source_id_2
-        args.output_dir = output_dir
-        # Run the upload function
-        args = api(args)
+        args.output_dir = self.output_folder
 
-        # 4.) Import predictions
-        self.parent().activeviewer.annotations.importCoralNetCSVAnn(args.predictions, channel)
+        try:
+            # Run the CoralNet API function
+            args = api(args)
+            # Check that the file was created
+            if os.path.exists(args.predictions):
+                self.predictions_file = args.predictions
+            else:
+                raise Exception("Predictions file was not created")
 
-        print("Done.")
-        self.close()
+        except Exception as e:
+            raise Exception(f"CoralNet API failed. {e}")
+
+    def taglabImport(self):
+        """
+
+        """
+        try:
+            # Get the channel for the orthomosaic
+            channel = self.parent().activeviewer.image.getRGBChannel()
+            self.parent().activeviewer.annotations.importCoralNetCSVAnn(self.predictions_file, channel)
+        except Exception as e:
+            raise Exception("TagLab annotations could not be imported")
 
     def close(self):
+        sys.stdout = sys.__stdout__
         self.closed.emit()
