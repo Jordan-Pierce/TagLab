@@ -1006,4 +1006,4 @@ class QtiViewWidget(QWidget):
 
     def closeEvent(self, event):
         self.deactivateMetashape()
-        self.closed.emit()
+        super().closeEvent(event)

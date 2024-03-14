@@ -39,8 +39,8 @@ class ConsoleOutput(TextIOBase):
         self.widget = widget
 
     def write(self, string):
-        self.widget.append(string)
-
+        self.widget.append(string.strip())
+        QApplication.processEvents()
 
 class ConsoleWidget(QTextEdit):
     def __init__(self, parent=None):
@@ -86,7 +86,7 @@ class CoralNetToolboxWidget(QWidget):
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
         self.setSizePolicy(sizePolicy)
-        self.setMinimumSize(800, 600)
+        self.setMinimumSize(1000, 600)
 
         self.setStyleSheet("background-color: rgba(60,60,65,100); color: white")
 
@@ -176,6 +176,12 @@ class CoralNetToolboxWidget(QWidget):
         layoutOutputFolder.addWidget(self.btnOutputFolder)
 
         # -----------------------
+        # Console Widget
+        # -----------------------
+        self.console_widget = ConsoleWidget()
+        self.console_widget.setFixedHeight(400)
+
+        # -----------------------
         # Buttons
         # -----------------------
         layoutButtons = QHBoxLayout()
@@ -191,26 +197,21 @@ class CoralNetToolboxWidget(QWidget):
         layoutButtons.addWidget(self.btnExit)
 
         # -----------------------
-        # Console Widget
-        # -----------------------
-        self.console_widget = ConsoleWidget()
-        self.console_widget.setFixedHeight(200)
-
-        # -----------------------
         # Final Layout order
         # -----------------------
-        layoutV = QVBoxLayout()
+        layoutInfo = QVBoxLayout()
 
         # Add your existing layout elements
-        layoutV.addLayout(layoutUsername)
-        layoutV.addLayout(layoutPassword)
-        layoutV.addLayout(layoutSourceID1)
-        layoutV.addLayout(layoutSourceID2)
-        layoutV.addLayout(layoutOutputFolder)
-        layoutV.addLayout(layoutButtons)
+        layoutInfo.addLayout(layoutUsername)
+        layoutInfo.addLayout(layoutPassword)
+        layoutInfo.addLayout(layoutSourceID1)
+        layoutInfo.addLayout(layoutSourceID2)
+        layoutInfo.addLayout(layoutOutputFolder)
+        layoutInfo.addWidget(self.console_widget)
+        layoutInfo.addLayout(layoutButtons)
 
-        # Add console widget to the layout
-        layoutV.addWidget(self.console_widget)
+        layoutV = QVBoxLayout()
+        layoutV.addLayout(layoutInfo)
 
         self.setLayout(layoutV)
 
@@ -265,41 +266,23 @@ class CoralNetToolboxWidget(QWidget):
 
         except Exception as e:
             QApplication.restoreOverrideCursor()
-            msgBox.setText("Invalid username or password")
+            msgBox.setText(f"Invalid username or password. {e}")
             msgBox.exec()
             return
 
-        # # Show progress bar
-        # progress_bar = QtProgressBarCustom()
-        # progress_bar.setWindowFlags(Qt.ToolTip | Qt.CustomizeWindowHint)
-        # progress_bar.setWindowModality(Qt.NonModal)
-        # progress_bar.show()
-
         try:
-            # progress_bar.setMessage("Exporting data...")
-            # progress_bar.setProgress(25)
-            # QApplication.processEvents()
             # Export point annotations and tiles from
             # active viewer based on user defined area
             self.taglabExport()
 
-            # progress_bar.setMessage("Uploading data...")
-            # progress_bar.setProgress(50)
-            # QApplication.processEvents()
             # Use upload function to upload just
             # the images in the tiles folder
             self.coralnetUpload()
 
-            # progress_bar.setMessage("Accessing API...")
-            # progress_bar.setProgress(75)
-            # QApplication.processEvents()
             # Use api function and point annotations
             # to get predictions for uploaded tiles
             self.coralnetAPI()
 
-            # progress_bar.setMessage("Importing data...")
-            # progress_bar.setProgress(99)
-            # QApplication.processEvents()
             # Import predictions back to TagLab
             self.taglabImport()
 
@@ -307,16 +290,12 @@ class CoralNetToolboxWidget(QWidget):
             msgBox.setText(f"{e}")
             msgBox.exec()
 
-        # progress_bar.close()
-        # del progress_bar
-        # progress_bar = None
-
         QApplication.restoreOverrideCursor()
         self.close()
 
     def coralnetAuthenticate(self):
         """
-
+        Authenticates the username and password before starting the process.
         """
         try:
             # Make sure the username and password are correct
@@ -345,6 +324,7 @@ class CoralNetToolboxWidget(QWidget):
             self.output_folder = f"{output_dir}"
             self.tiles_folder = f"{output_dir}/tiles"
             self.annotations_file = csv_file
+            print("NOTE: Data exported successfully")
         else:
             raise Exception("TagLab annotations could not be exported")
 
@@ -365,6 +345,7 @@ class CoralNetToolboxWidget(QWidget):
         try:
             # Run the upload function
             upload(args)
+            print("NOTE: Data uploaded successfully")
         except Exception as e:
             raise Exception(f"CoralNet upload failed. {e}")
 
@@ -387,6 +368,7 @@ class CoralNetToolboxWidget(QWidget):
             # Check that the file was created
             if os.path.exists(args.predictions):
                 self.predictions_file = args.predictions
+                print("NOTE: Predictions made successfully")
             else:
                 raise Exception("Predictions file was not created")
 
@@ -401,9 +383,10 @@ class CoralNetToolboxWidget(QWidget):
             # Get the channel for the orthomosaic
             channel = self.parent().activeviewer.image.getRGBChannel()
             self.parent().activeviewer.annotations.importCoralNetCSVAnn(self.predictions_file, channel)
+            print("NOTE: Predictions imported successfully")
         except Exception as e:
             raise Exception("TagLab annotations could not be imported")
 
-    def close(self):
+    def closeEvent(self, event):
         sys.stdout = sys.__stdout__
-        self.closed.emit()
+        super().closeEvent(event)
