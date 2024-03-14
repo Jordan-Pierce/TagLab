@@ -48,6 +48,8 @@ TagLab allows to :
   - Point annotations (**all credit goes to original TagLab authors**)
     - Point sampling select work area (shows pixel and metric space)
     - Basic Import / Export of point annotations in CoralNet Format
+- 03/2024
+  - Integrated `Upload` and `API` tools from [`CoralNet Toolbox`](https://github.com/Jordan-Pierce/CoralNet-Toolbox) into `TagLab` to allow for `CoralNet` models to make predictions on point annotations in orthomosaic.
 
 We are working hard to create a website with detailed instructions about TagLab. Stay tuned(!)
 
