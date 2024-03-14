@@ -1192,12 +1192,11 @@ class Annotation(QObject):
         basename = os.path.basename(image_name).split('.')[0]
 
         # Create the output directory to be based on ortho name
-        output_dir = f"{output_dir}/{basename}_Exported"
         tiles_dir = f"{output_dir}/tiles"
         os.makedirs(tiles_dir, exist_ok=True)
 
         # Output CSV file
-        csv_file = f"{output_dir}/{basename}_exported_points.csv"
+        csv_file = f"{output_dir}/exported_points.csv"
 
         # Selected working area
         if working_area:

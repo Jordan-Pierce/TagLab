@@ -30,6 +30,7 @@ from source.QtProgressBarCustom import QtProgressBarCustom
 import argparse
 from source.tools.CoralNetToolbox.API import api
 from source.tools.CoralNetToolbox.Upload import upload
+from source.tools.CoralNetToolbox.Common import get_now
 from source.tools.CoralNetToolbox.Browser import authenticate
 
 
@@ -256,6 +257,7 @@ class CoralNetToolboxWidget(QWidget):
         self.source_id_1 = int(self.editSourceID1.text())
         self.source_id_2 = int(self.editSourceID2.text())
         self.output_folder = self.editOutputFolder.text()
+        self.output_folder = f"{self.output_folder}/{get_now()}"
 
         try:
             authenticate(self.username, self.password)
@@ -271,6 +273,13 @@ class CoralNetToolboxWidget(QWidget):
             return
 
         try:
+            # TODO
+            # Add tile size limit (coralnet allows 8k x 8k)
+            # check box for automatically deleting temp data
+            # customize upload / api using functions to make console log prettier
+            # have imported data auto update without having to save, re-open
+            # import source ids after pre-authorization?
+
             # Export point annotations and tiles from
             # active viewer based on user defined area
             self.taglabExport()
@@ -286,12 +295,17 @@ class CoralNetToolboxWidget(QWidget):
             # Import predictions back to TagLab
             self.taglabImport()
 
-        except Exception as e:
-            msgBox.setText(f"{e}")
+            QApplication.restoreOverrideCursor()
+            msgBox.setText(f"Imported predictions successfully")
             msgBox.exec()
 
-        QApplication.restoreOverrideCursor()
-        self.close()
+            # Close the widget
+            self.close()
+
+        except Exception as e:
+            QApplication.restoreOverrideCursor()
+            msgBox.setText(f"{e}")
+            msgBox.exec()
 
     def coralnetAuthenticate(self):
         """
