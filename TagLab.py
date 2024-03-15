@@ -1114,6 +1114,11 @@ class TagLab(QMainWindow):
         exportPointsAct.setStatusTip("Export Point Annotations As .CSV")
         exportPointsAct.triggered.connect(self.exportCoralNetPointAnn)
 
+        exportCoralNetDataAct = QAction("Export Tiled Data for CoralNet", self)
+        exportCoralNetDataAct.setStatusTip("Export Data for CoralNet Model Training")
+        # exportCoralNetDataAct.triggered.connect()
+        # TODO add ExportCoralNet Data in dropdown
+
         openCoralNetToolboxAct = QAction("Open CoralNet-Toolbox...", self)
         openCoralNetToolboxAct.triggered.connect(self.openCoralNetToolbox)
 
@@ -1121,8 +1126,10 @@ class TagLab(QMainWindow):
         self.pointmenu.setStyleSheet(styleMenu)
         self.pointmenu.addAction(setWorkingAreaAct)
         self.pointmenu.addAction(samplePointsAct)
+        self.pointmenu.addSeparator()
         self.pointmenu.addAction(importPointsAct)
         self.pointmenu.addAction(exportPointsAct)
+        self.pointmenu.addAction(exportCoralNetDataAct)
         self.pointmenu.addSeparator()
         self.pointmenu.addAction(openCoralNetToolboxAct)
 
@@ -4608,14 +4615,14 @@ class TagLab(QMainWindow):
                 # Open the file, and draw all the points on viewer
                 self.activeviewer.annotations.importCoralNetCSVAnn(file_name, channel)
                 self.activeviewer.drawAllPointsAnn()
-                # TODO how to update class in DataTable without having to exit TagLab?
+                # TODO how to update class in DataTable without having to reload TagLab project?
                 self.updateDataPanel()
                 self.updatePanels()
                 box.setText(f"Point annotations imported successfully!")
                 box.exec()
 
             except Exception as e:
-                box.setText(f"File provided not in CoralNet format!\n{e}")
+                box.setText(f"File provided not in CoralNet format! {e}")
                 box.exec()
         else:
             box.setText("File path provided is not valid!")

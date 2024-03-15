@@ -19,19 +19,19 @@
 
 import os
 import sys
+import glob
 from io import TextIOBase
+
+import pandas as pd
 
 from PyQt5.QtCore import Qt, pyqtSlot, pyqtSignal
 from PyQt5.QtWidgets import QWidget, QFileDialog, QApplication, QMessageBox, QTextEdit
 from PyQt5.QtWidgets import QSizePolicy, QLineEdit, QLabel, QPushButton, QHBoxLayout, QVBoxLayout
 
-from source.QtProgressBarCustom import QtProgressBarCustom
-
-import argparse
-from source.tools.CoralNetToolbox.API import api
-from source.tools.CoralNetToolbox.Upload import upload
-from source.tools.CoralNetToolbox.Common import get_now
-from source.tools.CoralNetToolbox.Browser import authenticate
+from source.tools.CoralNetToolbox.API import submit_jobs
+from source.tools.CoralNetToolbox.Upload import upload_images
+from source.tools.CoralNetToolbox.Common import get_now, IMG_FORMATS
+from source.tools.CoralNetToolbox.Browser import login, authenticate, check_for_browsers, get_token
 
 
 class ConsoleOutput(TextIOBase):
@@ -43,6 +43,7 @@ class ConsoleOutput(TextIOBase):
         self.widget.append(string.strip())
         QApplication.processEvents()
 
+
 class ConsoleWidget(QTextEdit):
     def __init__(self, parent=None):
         super(ConsoleWidget, self).__init__(parent)
@@ -50,6 +51,9 @@ class ConsoleWidget(QTextEdit):
         self._console_output = ConsoleOutput(self)
         sys.stdout = self._console_output
         sys.stderr = self._console_output
+
+    def clearConsole(self):
+        self.clear()
 
 
 class CoralNetToolboxWidget(QWidget):
@@ -67,6 +71,12 @@ class CoralNetToolboxWidget(QWidget):
         self.tiles_folder = ""
         self.annotations_file = ""
         self.predictions_file = ""
+
+        # Driver
+        self.driver = None
+
+        # Tile size
+        self.tile_size = 1024
 
         # --------------------
         # The window settings
@@ -132,6 +142,9 @@ class CoralNetToolboxWidget(QWidget):
         layoutPassword.addWidget(self.editPassword)
         layoutPassword.addWidget(self.btnPassword)
 
+        # Authorization button
+        # TODO add button to call self.coralnetAuthenticate
+
         # Source ID 1 (images)
         layoutSourceID1 = QHBoxLayout()
         layoutSourceID1.setAlignment(Qt.AlignLeft)
@@ -166,6 +179,7 @@ class CoralNetToolboxWidget(QWidget):
         self.lblOutputFolder.setMinimumWidth(130)
         self.editOutputFolder = QLineEdit("")
         self.editOutputFolder.setPlaceholderText("")
+        # TODO set placeholder text to data folder
         self.editOutputFolder.setStyleSheet("background-color: rgb(40,40,40); border: 1px solid rgb(90,90,90)")
         self.btnOutputFolder = QPushButton("...")
         self.btnOutputFolder.setFixedWidth(20)
@@ -175,6 +189,20 @@ class CoralNetToolboxWidget(QWidget):
         layoutOutputFolder.addWidget(self.lblOutputFolder)
         layoutOutputFolder.addWidget(self.editOutputFolder)
         layoutOutputFolder.addWidget(self.btnOutputFolder)
+
+        # Tile size (combobox, power of 2)
+        # TODO Add tile size limit (CoralNet allows 8k x 8k)
+
+        # Delete temporary data (check box)
+        # TODO boolean to delete temporary data in self.output_dir (make sure it's the right folder)
+
+        # -----------------------
+        # Source List Widget
+        # -----------------------
+
+        # -----------------------
+        # Label Mapping Widget
+        # -----------------------
 
         # -----------------------
         # Console Widget
@@ -259,27 +287,11 @@ class CoralNetToolboxWidget(QWidget):
         self.output_folder = self.editOutputFolder.text()
         self.output_folder = f"{self.output_folder}/{get_now()}"
 
-        try:
-            authenticate(self.username, self.password)
-
-            # Cache the Username and Password as local variables
-            os.environ["CORALNET_USERNAME"] = self.username
-            os.environ["CORALNET_PASSWORD"] = self.password
-
-        except Exception as e:
-            QApplication.restoreOverrideCursor()
-            msgBox.setText(f"Invalid username or password. {e}")
-            msgBox.exec()
-            return
+        # TODO this will be after the authenticate button
+        self.coralnetAuthenticate()
+        self.console_widget.clearConsole()
 
         try:
-            # TODO
-            # Add tile size limit (coralnet allows 8k x 8k)
-            # check box for automatically deleting temp data
-            # customize upload / api using functions to make console log prettier
-            # have imported data auto update without having to save, re-open
-            # import source ids after pre-authorization?
-
             # Export point annotations and tiles from
             # active viewer based on user defined area
             self.taglabExport()
@@ -303,20 +315,58 @@ class CoralNetToolboxWidget(QWidget):
             self.close()
 
         except Exception as e:
+            self.console_widget.clearConsole()
             QApplication.restoreOverrideCursor()
             msgBox.setText(f"{e}")
             msgBox.exec()
 
+    @pyqtSlot()
     def coralnetAuthenticate(self):
         """
         Authenticates the username and password before starting the process.
         """
+        # Good or Bad box
+        msgBox = QMessageBox()
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+
         try:
-            # Make sure the username and password are correct
-            # before trying to run the entire process
+            # Check that the credentials are correct
             authenticate(self.username, self.password)
+
+            # Cache the Username and Password as local variables
+            os.environ["CORALNET_USERNAME"] = self.username
+            os.environ["CORALNET_PASSWORD"] = self.password
+
+            # Use the username and password to get the token
+            token, headers = get_token(self.username, self.password)
+
+            # Check for Browsers
+            self.driver = check_for_browsers(headless=True)
+            # Store the credentials in the driver
+            self.driver.capabilities['credentials'] = {
+                'username': self.username,
+                'password': self.password,
+                'headers': headers,
+                'token': token
+            }
+            # Log in to CoralNet
+            self.driver, _ = login(self.driver)
+
+            # Autofill Source ID lists
+            # TODO
+
         except Exception as e:
-            raise Exception(f"CoralNet authentication failed. {e}")
+            msgBox.setText(f"Could not authenticate with provided credentials. {e}")
+            msgBox.exec()
+
+        QApplication.restoreOverrideCursor()
+
+    @pyqtSlot()
+    def taglabUpdateSources(self):
+        """
+
+        """
+        pass
 
     def taglabExport(self):
         """
@@ -333,7 +383,7 @@ class CoralNetToolboxWidget(QWidget):
                                                                                          channel,
                                                                                          annotations,
                                                                                          working_area,
-                                                                                         1024)
+                                                                                         self.tile_size)
         if os.path.exists(csv_file):
             self.output_folder = f"{output_dir}"
             self.tiles_folder = f"{output_dir}/tiles"
@@ -346,20 +396,22 @@ class CoralNetToolboxWidget(QWidget):
         """
 
         """
-        args = argparse.ArgumentParser().parse_args()
-        args.username = self.username
-        args.password = self.password
-        args.source_id = self.source_id_1
-        args.images = self.tiles_folder
-        args.prefix = ""
-        args.annotations = ""
-        args.labelset = ""
-        args.headless = True
-
         try:
+            # Get all the tiles from the tiles folder
+            images = os.path.abspath(self.tiles_folder)
+            images = glob.glob(images + "/*.*")
+            images = [i for i in images if i.split('.')[-1].lower() in IMG_FORMATS]
+
+            # Check if there are images to upload
+            if len(images) > 0:
+                print(f"NOTE: Found {len(images)} images to upload")
+            else:
+                raise Exception(f"No valid images found in {self.tiles_folder}")
+
             # Run the upload function
-            upload(args)
+            self.driver, _ = upload_images(self.driver, self.source_id_1, images, prefix="")
             print("NOTE: Data uploaded successfully")
+
         except Exception as e:
             raise Exception(f"CoralNet upload failed. {e}")
 
@@ -367,21 +419,33 @@ class CoralNetToolboxWidget(QWidget):
         """
 
         """
-        args = argparse.ArgumentParser().parse_args()
-        args.username = self.username
-        args.password = self.password
-        args.points = self.annotations_file
-        args.prefix = ""
-        args.source_id_1 = self.source_id_1
-        args.source_id_2 = self.source_id_2
-        args.output_dir = self.output_folder
-
         try:
+            # Make sure the file exists
+            if os.path.exists(self.annotations_file):
+                # Read it in
+                points = pd.read_csv(self.annotations_file, index_col=0)
+            else:
+                raise Exception(f"{self.annotations_file} does not exist")
+
+            # Check to see if the csv file has the expected columns
+            assert 'Name' in points.columns, "'Name' field not found in file"
+            assert 'Row' in points.columns, "'Row' field not found in file"
+            assert 'Column' in points.columns, "'Column' field not found in file"
+            assert len(points) > 0, "No points found in file"
+
+            # Convert list of names to a list
+            images_w_points = points['Name'].to_list()
+
             # Run the CoralNet API function
-            args = api(args)
+            self.driver, _, self.predictions_file = submit_jobs(self.driver,
+                                                                self.source_id_1,
+                                                                self.source_id_2,
+                                                                "",
+                                                                images_w_points,
+                                                                points,
+                                                                self.output_folder)
             # Check that the file was created
-            if os.path.exists(args.predictions):
-                self.predictions_file = args.predictions
+            if os.path.exists(self.predictions_file):
                 print("NOTE: Predictions made successfully")
             else:
                 raise Exception("Predictions file was not created")
@@ -402,5 +466,9 @@ class CoralNetToolboxWidget(QWidget):
             raise Exception("TagLab annotations could not be imported")
 
     def closeEvent(self, event):
+        """
+
+        """
+        self.driver = None
         sys.stdout = sys.__stdout__
         super().closeEvent(event)

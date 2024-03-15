@@ -1214,6 +1214,7 @@ class Annotation(QObject):
         w = right - left
         h = bottom - top
 
+        # TODO this needs to be different, it should allow images 224 < tile_size < 8192
         # Check if working area is smaller than tile size
         if w < tile_size and h < tile_size:
             raise Exception(f"Working area is too small, must be at least {tile_size} x {tile_size}")
