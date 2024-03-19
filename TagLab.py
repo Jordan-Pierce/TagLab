@@ -4223,6 +4223,11 @@ class TagLab(QMainWindow):
 
     @pyqtSlot()
     def exportAnnAsShapefiles(self):
+        """
+        Writes the current orthomosaic's regions to a shape file; modified so that
+        if the orthomosaic is not already georeferenced, the shapefile can still
+        be written, but it'll use default EPSG::3857 (units meters)
+        """
 
         if self.activeviewer is None:
             return
@@ -4230,9 +4235,9 @@ class TagLab(QMainWindow):
         if self.activeviewer.image is not None:
             if self.activeviewer.image.georef_filename == "":
                 box = QMessageBox()
-                box.setText("Georeference information are not available.")
+                box.setText("Warning: Georeference information is not available. "
+                            "Shapefile will be saved in EPSG::3857 coordinate system.")
                 box.exec()
-                return
 
         filters = "SHP (*.shp)"
         output_filename, _ = QFileDialog.getSaveFileName(self, "Save Shapefile as", self.taglab_dir, filters)
@@ -4260,11 +4265,12 @@ class TagLab(QMainWindow):
             box.exec()
             return
 
-        if self.activeviewer.image.georef_filename == "":
-            box = QMessageBox()
-            box.setText("Georeference information are not available.")
-            box.exec()
-            return
+        if self.activeviewer.image is not None:
+            if self.activeviewer.image.georef_filename == "":
+                box = QMessageBox()
+                box.setText("Warning: Georeference information is not available. "
+                            "Shapefile will be saved in EPSG::3857 coordinate system.")
+                box.exec()
 
         filters = "Tiff (*.tif *.tiff) ;; All Files (*)"
         output_filename, _ = QFileDialog.getSaveFileName(self, "Output GeoTiff", "", filters)
