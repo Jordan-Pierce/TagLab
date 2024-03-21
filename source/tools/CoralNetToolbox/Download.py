@@ -80,7 +80,7 @@ def get_updated_labelset_list():
     return names
 
 
-def download_coralnet_sources(driver, output_dir):
+def download_coralnet_sources(driver, output_dir=None):
     """
     Downloads a list of all the public sources currently on CoralNet.
     """
@@ -92,14 +92,13 @@ def download_coralnet_sources(driver, output_dir):
     # Variable to hold the list of sources
     sources = None
 
-    # Go to the images page
-    driver.get(CORALNET_SOURCE_URL)
-
     print("NOTE: Downloading CoralNet Source Dataframe")
 
     try:
+        # Send a GET request to the URL
+        response = requests.get(CORALNET_SOURCE_URL)
         # Parse the HTML response using BeautifulSoup
-        soup = BeautifulSoup(driver.page_source, 'html.parser')
+        soup = BeautifulSoup(response.content, 'html.parser')
 
         # Find all the instances of sources
         links = soup.find_all('ul', class_='object_list')[0].find_all("li")
@@ -129,13 +128,18 @@ def download_coralnet_sources(driver, output_dir):
 
         # Create a dataframe
         sources = pd.DataFrame(sources)
-        sources.to_csv(f"{output_dir}/CoralNet_Source_ID_Dataframe.csv")
 
-        if os.path.exists(f"{output_dir}/CoralNet_Source_ID_Dataframe.csv"):
-            print("NOTE: CoralNet Source Dataframe saved successfully")
-        else:
-            raise Exception("ERROR: Could not download Source ID Dataframe; "
-                            "check that variable CoralNet URL is correct.")
+        # Save if user provided an output directory
+        if output_dir:
+            # Just in case
+            os.makedirs(output_dir, exist_ok=True)
+            sources.to_csv(f"{output_dir}/CoralNet_Source_ID_Dataframe.csv")
+
+            if os.path.exists(f"{output_dir}/CoralNet_Source_ID_Dataframe.csv"):
+                print("NOTE: CoralNet Source Dataframe saved successfully")
+            else:
+                raise Exception("ERROR: Could not download Source ID Dataframe; "
+                                "check that variable CoralNet URL is correct.")
     except Exception as e:
         print(f"ERROR: Unable to get source Dataframe from CoralNet.\n{e}")
         sources = None
@@ -312,9 +316,9 @@ def get_sources_with(driver, choices, output_dir):
             if os.path.exists(f"{output_file}"):
                 print("NOTE: Sources 'With' dataframe saved successfully")
             else:
-                raise Exception("ERROR: Could not save Sources 'With' dataframe")
+                raise Exception("WARNING: Could not save Sources 'With' dataframe")
         else:
-            raise Exception("ERROR: No sources found that match the provided criteria")
+            raise Exception("NOTE: No sources found that match the provided criteria")
 
     except Exception as e:
         print(f"{e}")
@@ -374,7 +378,6 @@ def download_metadata(driver, source_id, source_dir=None):
 
         # Loop through and collect meta from each model instance, store
         for idx, point in progress_printer(enumerate(data)):
-
             classifier_nbr = point["x"]
             score = point["y"]
             nimages = point["nimages"]
@@ -397,13 +400,17 @@ def download_metadata(driver, source_id, source_dir=None):
                                            'Traintime',
                                            'Global id'])
 
+        # Save if user provided an output directory
         if source_dir:
-            # Save the metadata
+            # Just in case
+            os.makedirs(source_dir, exist_ok=True)
+            # Save the meta as a CSV file
             meta.to_csv(f"{source_dir}{source_id}_metadata.csv")
-
             # Check that it was saved
             if os.path.exists(f"{source_dir}{source_id}_metadata.csv"):
                 print("NOTE: Metadata saved successfully")
+            else:
+                raise Exception("WARNING: Metadata could not be saved")
 
     except Exception as e:
         print(f"ERROR: Issue with downloading metadata")
@@ -412,7 +419,7 @@ def download_metadata(driver, source_id, source_dir=None):
     return driver, meta
 
 
-def download_labelset(driver, source_id, source_dir):
+def download_labelset(driver, source_id, source_dir=None):
     """
     Given a source ID, download the labelset.
     """
@@ -438,26 +445,50 @@ def download_labelset(driver, source_id, source_dir):
     print(f"\nNOTE: Downloading labelset for {source_id}")
 
     try:
-        # Find the "Export Label to CSV" button
-        path = 'input[type="submit"][value="Export label entries to CSV"]'
-        button = driver.find_element(By.CSS_SELECTOR, path)
+        # Get the page source HTML
+        html_content = driver.page_source
+        # Parse the HTML content
+        soup = BeautifulSoup(html_content, 'html.parser')
 
-        # Click the button
-        if button.is_enabled():
-            button.click()
-        else:
-            raise Exception("ERROR: Button is not enabled")
+        # Find the table with id 'label-table'
+        table = soup.find('table', {'id': 'label-table'})
+        # Initialize lists to store data
+        label_ids = []
+        names = []
+        short_codes = []
 
-        # Wait for the file to download
-        while not os.path.exists(f"{source_dir}labelset.csv"):
-            time.sleep(1)
+        # Loop through each row in the table
+        for idx, row in progress_printer(enumerate(table.find_all('tr'))):
+            # Skip the header row
+            if not row.find('th'):
+                # Extract label ID from href attribute of the anchor tag
+                label_id = row.find('a')['href'].split('/')[-2]
+                label_ids.append(label_id)
+                # Extract Name from the anchor tag
+                name = row.find('a').text.strip()
+                names.append(name)
+                # Extract Short Code from the second td tag
+                short_code = row.find_all('td')[1].text.strip()
+                short_codes.append(short_code)
 
-        if os.path.exists(f"{source_dir}labelset.csv"):
-            path = f"{source_dir}{source_id}_labelset.csv"
-            shutil.move(f"{source_dir}labelset.csv", path)
-            print("NOTE: Labelset saved successfully")
+        # Create a pandas DataFrame
+        labelset = pd.DataFrame({
+            'Label ID': label_ids,
+            'Name': names,
+            'Short Code': short_codes
+        })
 
-        labelset = pd.read_csv(path)
+        # Save if user provided an output directory
+        if source_dir:
+            # Just in case
+            os.makedirs(source_dir, exist_ok=True)
+            # Save the labelset as a CSV file
+            labelset.to_csv(f"{source_dir}{source_id}_labelset.csv")
+            # Check that it was saved
+            if os.path.exists(f"{source_dir}{source_id}_labelset.csv"):
+                print("NOTE: Labelset saved successfully")
+            else:
+                raise Exception("WARNING: Labelset could not be saved")
 
     except Exception as e:
         print(f"ERROR: Issue with downloading labelset")
@@ -982,7 +1013,6 @@ def download(args):
     # -------------------------------------------------------------------------
     try:
         for idx, source_id in enumerate(args.source_ids):
-
             # Download all data from source
             driver, m, l, i, a = download_data(driver, source_id, output_dir)
 
