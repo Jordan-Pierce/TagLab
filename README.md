@@ -44,7 +44,12 @@ TagLab allows to :
   - Working area for SAM and pos/neg (RITM) tools will show you the dimensions of the working area
 - 02/2024
   - [`iView`](https://www.youtube.com/watch?v=H3AjshATPy0) using Metashape API to view corresponding images of orthomosaic; requires Professional license
-  - Fixed `Refine` tool
+  - Fixed `Refine` tool bug
+  - Point annotations (**all credit goes to original TagLab authors**)
+    - Point sampling select work area (shows pixel and metric space)
+    - Basic Import / Export of point annotations in CoralNet Format
+- 03/2024
+  - Integrated `Upload` and `API` tools from [`CoralNet Toolbox`](https://github.com/Jordan-Pierce/CoralNet-Toolbox) into `TagLab` to allow for `CoralNet` models to make predictions on point annotations in orthomosaic.
 
 We are working hard to create a website with detailed instructions about TagLab. Stay tuned(!)
 

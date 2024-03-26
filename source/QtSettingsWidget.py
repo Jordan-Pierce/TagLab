@@ -24,8 +24,8 @@ from PyQt5.QtGui import QIntValidator
 from PyQt5.QtWidgets import QWidget, QColorDialog, QListWidget, QStackedWidget, QComboBox, QSizePolicy, QLineEdit, \
     QLabel, QSpinBox, QCheckBox, QPushButton, QHBoxLayout, QVBoxLayout, QFileDialog
 
-class generalSettingsWidget(QWidget):
 
+class generalSettingsWidget(QWidget):
     researchFieldChanged = pyqtSignal(str)
     autosaveInfoChanged = pyqtSignal(int)
 
@@ -36,11 +36,11 @@ class generalSettingsWidget(QWidget):
 
         self.settings = settings
 
-        self.autosave_interval = 0  #autosave disabled
+        self.autosave_interval = 0  # autosave disabled
 
         self.checkbox_autosave = QCheckBox("Autosave")
         self.spinbox_autosave_interval = QSpinBox()
-        self.spinbox_autosave_interval.setRange(5, 15)
+        self.spinbox_autosave_interval.setRange(1, 15)
         self.lbl_autosave_1 = QLabel("Every ")
         self.lbl_autosave_2 = QLabel(" minutes.")
 
@@ -94,7 +94,6 @@ class generalSettingsWidget(QWidget):
             default_dict = os.path.relpath(file_name, start=self.taglab_dir)
             self.edit_default_dict.setText(default_dict)
             self.settings.setValue("default-dictionary", default_dict)
-
 
     @pyqtSlot(int)
     def autosaveChanged(self, status):
@@ -162,7 +161,6 @@ class generalSettingsWidget(QWidget):
 
 
 class drawingSettingsWidget(QWidget):
-
     borderPenChanged = pyqtSignal(str, int)
     selectionPenChanged = pyqtSignal(str, int)
     workingAreaPenChanged = pyqtSignal(str, int)
@@ -409,7 +407,6 @@ class drawingSettingsWidget(QWidget):
 
 
 class QtSettingsWidget(QWidget):
-
     accepted = pyqtSignal()
 
     def __init__(self, taglab_dir, parent=None):
@@ -467,13 +464,12 @@ class QtSettingsWidget(QWidget):
         self.setWindowTitle("Settings")
         self.setWindowFlags(Qt.Window | Qt.CustomizeWindowHint | Qt.WindowCloseButtonHint | Qt.WindowTitleHint)
 
-
     def loadSettings(self):
-
         # 0: autosave is disabled , >0: the project is saved every N seconds
         self.autosave_interval = self.settings.value("autosave", defaultValue=0, type=int)
         self.research_field = self.settings.value("research-field", defaultValue="Marine Ecology/Biology", type=str)
-        self.default_dictionary = self.settings.value("default-dictionary", defaultValue="dictionaries/scripps.json", type=str)
+        self.default_dictionary = self.settings.value("default-dictionary", defaultValue="dictionaries/scripps.json",
+                                                      type=str)
 
         self.selection_pen_color = self.settings.value("selection-pen-color", defaultValue="255-255-255", type=str)
         self.selection_pen_width = self.settings.value("selection-pen-width", defaultValue=2, type=int)
@@ -495,7 +491,3 @@ class QtSettingsWidget(QWidget):
     @pyqtSlot(int)
     def display(self, i):
         self.stackedwidget.setCurrentIndex(i)
-
-
-
-

@@ -103,12 +103,12 @@ def create_thumbnail(file_path):
     return file_path, thumbnail
 
 
-class QtiView(QWidget):
+class QtiViewWidget(QWidget):
 
     closed = pyqtSignal()
 
     def __init__(self, parent=None):
-        super(QtiView, self).__init__(parent)
+        super(QtiViewWidget, self).__init__(parent)
 
         # Metashape
         self.metashapeLicense = False
@@ -815,12 +815,14 @@ class QtiView(QWidget):
 
     def setiViewPreview(self, file_path, u=None, v=None, rotation=None):
         """
-        Takes in the path of the image, converts to qimage, displays
+        Takes in the path of the image, converts to qimage, and displays it.
         """
 
         # Reset the Zoom and Rotation
         self.zoom_factor = 1.0
         self.rotation_angle = 0.0
+        scene_x = 0
+        scene_y = 0
 
         if not os.path.exists(file_path):
             QApplication.restoreOverrideCursor()
@@ -829,7 +831,7 @@ class QtiView(QWidget):
             msgBox.exec()
             return
 
-        # Reads the image path, converts to RGB
+        # Read the image path and convert to RGB
         image_reader = QImageReader(file_path)
         image = image_reader.read()
 
@@ -837,15 +839,36 @@ class QtiView(QWidget):
             # Add a red dot on the image if coordinates are provided
             self.addRedDot(image, float(u), float(v))
 
-        if rotation:
-            # Rotate the image if rotation is provided
-            transform = QTransform().rotate(float(rotation))
-            image = image.transformed(transform)
+            # Calculate scene coordinates from pixel coordinates
+            image_width = image.width()
+            image_height = image.height()
+
+            if rotation:
+                # Rotate the coordinates if rotation is provided
+                rotation_transform = QTransform().rotate(float(rotation))
+                u_rot, v_rot = rotation_transform.map(float(u), float(v))
+
+                # Assuming your QGraphicsView is named 'self.view'
+                view_width = self.scene.width()
+                view_height = self.scene.height()
+
+                # Calculate scene coordinates
+                scene_x = float(u_rot) * (view_width / image_width)
+                scene_y = float(v_rot) * (view_height / image_height)
+
+                # Rotate the image if rotation is provided
+                transform = QTransform().rotate(float(rotation))
+                image = image.transformed(transform)
 
         # Display the image using a QPixmap
         new_pixmap = QPixmap.fromImage(image)
         self.pixmap_item.setPixmap(new_pixmap.scaled(QSize(self.iViewWidth, self.iViewHeight), Qt.KeepAspectRatio))
+
+        # Adjust the view transformation
         self.scene.setSceneRect(self.scene.itemsBoundingRect())
+
+        if not None in [u, v, rotation]:
+            self.graphicsView.centerOn(scene_x, scene_y)
 
     def addRedDot(self, image, u, v):
         """
@@ -953,7 +976,7 @@ class QtiView(QWidget):
         blank_image = QImage(self.iViewWidth, self.iViewHeight, QImage.Format_RGB32)
         blank_image.fill(Qt.black)
         pixmap = QPixmap.fromImage(blank_image)
-        # Add the image to the scene
+        # Add blank image to the scene
         self.pixmap_item = QGraphicsPixmapItem(pixmap)
         self.scene.addItem(self.pixmap_item)
         self.graphicsView.setScene(self.scene)
@@ -964,5 +987,23 @@ class QtiView(QWidget):
             self.thumbnail_container_layout.removeWidget(widgetToRemove)
             widgetToRemove.setParent(None)
 
+    def deactivateMetashape(self):
+        """
+        Node-locked licenses need to be deactivated otherwise can't be used
+        on another computer.
+        """
+        # Always deactivate after script regardless
+        try:
+            print("NOTE: Deactivating License...")
+            Metashape.License().deactivate()
+        except:
+            pass
+
+        if not Metashape.License().valid:
+            print("NOTE: License deactivated or was not active to begin with.")
+        else:
+            print("ERROR: License was not deactivated; do not delete compute without Deactivating!")
+
     def closeEvent(self, event):
-        self.closed.emit()
+        self.deactivateMetashape()
+        super().closeEvent(event)

@@ -1,39 +1,41 @@
-import os
-import pandas as pd
 import datetime
 import json
-import numpy as np
+import os
+import random
 
-from PyQt5.QtCore import QDir, QFileInfo
+import numpy as np
+import pandas as pd
+from PyQt5.QtCore import QDir
 from PyQt5.QtGui import QBrush, QColor
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
 
-from source.Image import Image
-from source.Channel import Channel
+from source import genutils
 from source.Annotation import Annotation
-from source.Shape import Layer, Shape
 from source.Blob import Blob
+from source.Channel import Channel
 from source.Label import Label
+from source.Point import Point
 from source.Correspondences import Correspondences
 from source.Genet import Genet
-from source import utils
 from source.Grid import Grid
+from source.Image import Image
+from source.Label import Label
 from source.RegionAttributes import RegionAttributes
+from source.Shape import Layer, Shape
+
 
 def loadProject(taglab_working_dir, filename, default_dict):
-
     dir = QDir(taglab_working_dir)
-    abspath = os.path.join(taglab_working_dir, dir.relativeFilePath(filename))
-    f = open(abspath, "r")
+    filename = dir.relativeFilePath(filename)
+    f = open(filename, "r")
     try:
         data = json.load(f)
     except json.JSONDecodeError as e:
         raise Exception(str(e))
 
-
     if "Map File" in data:
         project = loadOldProject(taglab_working_dir, data)
-        project.loadDictionary(os.path.join(taglab_working_dir, default_dict))
+        project.loadDictionary(default_dict)
         project.region_attributes = RegionAttributes()
     else:
         project = Project(**data)
@@ -49,14 +51,14 @@ def loadProject(taglab_working_dir, filename, default_dict):
 
     for image in project.images:
         for channel in image.channels:
-
-            channel_abspath = os.path.join(taglab_working_dir, channel.filename)
-            if not os.path.exists(channel_abspath):
-                (filename, filter) = QFileDialog.getOpenFileName(None, "Couldn't find "+ channel.filename + " please select it:", taglab_working_dir,
+            if not os.path.exists(channel.filename):
+                (filename, filter) = QFileDialog.getOpenFileName(None,
+                                                                 "Couldn't find " + channel.filename + " please select it:",
+                                                                 taglab_working_dir,
                                                                  "Image Files (*.png *.jpg *.jpeg *.tif *.tiff)")
                 dir = QDir(taglab_working_dir)
                 if image.georef_filename == channel.filename:
-                   image.georef_filename = dir.relativeFilePath(filename)
+                    image.georef_filename = dir.relativeFilePath(filename)
 
                 channel.filename = dir.relativeFilePath(filename)
 
@@ -84,7 +86,7 @@ def loadProject(taglab_working_dir, filename, default_dict):
 
     # ensure all maps have an acquisition date
     for im in project.images:
-        if not utils.isValidDate(im.acquisition_date):
+        if not genutils.isValidDate(im.acquisition_date):
             im.acquisition_date = "1955-11-05"
 
     # ensure the maps are ordered by the acquisition date
@@ -92,13 +94,13 @@ def loadProject(taglab_working_dir, filename, default_dict):
 
     return project
 
+
 # WARNING!! The old-style projects do not include a labels dictionary
 def loadOldProject(taglab_working_dir, data):
-
     project = Project()
     map_filename = data["Map File"]
 
-    #convert to relative paths in case:
+    # convert to relative paths in case:
     dir = QDir(taglab_working_dir)
     map_filename = dir.relativeFilePath(map_filename)
     image_name = os.path.basename(map_filename)
@@ -118,6 +120,7 @@ def loadOldProject(taglab_working_dir, data):
     project.images.append(image)
     return project
 
+
 class ProjectEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, Image):
@@ -127,6 +130,8 @@ class ProjectEncoder(json.JSONEncoder):
         elif isinstance(obj, Label):
             return obj.save()
         elif isinstance(obj, Annotation):
+            return obj.save()
+        elif isinstance(obj, Point):
             return obj.save()
         elif isinstance(obj, Blob):
             return obj.save()
@@ -144,13 +149,15 @@ class ProjectEncoder(json.JSONEncoder):
             return obj.save()
         return json.JSONEncoder.default(self, obj)
 
+
 class Project(object):
 
     def __init__(self, filename=None, labels={}, images=[], correspondences=None,
                  spatial_reference_system=None, metadata={}, image_metadata_template={}, genet={},
-                 dictionary_name="", dictionary_description="", working_area=None, region_attributes={}):
+                 dictionary_name="", dictionary_description="", working_area=None, region_attributes={},
+                 markers={}):
 
-        self.filename = None                                             #filename with path of the project json
+        self.filename = None  # filename with path of the project json
 
         # area of the images where the user annotate the data
         # NOTE 1: since the images are co-registered the working area is the same for all the images
@@ -160,18 +167,19 @@ class Project(object):
         self.dictionary_name = dictionary_name
         self.dictionary_description = dictionary_description
 
-        self.labels = { key: Label(**value) for key, value in labels.items() }
+        self.labels = {key: Label(**value) for key, value in labels.items()}
         if not 'Empty' in self.labels:
-            self.labels['Empty'] = Label(id='Empty', name='Empty', description=None, fill=[127, 127, 127], border=[200, 200, 200], visible=True)
+            self.labels['Empty'] = Label(id='Empty', name='Empty', description=None, fill=[127, 127, 127],
+                                         border=[200, 200, 200], visible=True)
 
         # compatibility with previous TagLab versions (working_area does not exist anymore)
         for img in images:
             if img.get("working_area") is not None:
                 img.__delitem__("working_area")
 
-        self.images = list(map(lambda img: Image(**img), images))       #list of annotated images
+        self.images = list(map(lambda img: Image(**img), images))  # list of annotated images
 
-                                                                         # dict of tables (DataFrame) of correspondences betweeen a source and a target image
+        # dict of tables (DataFrame) of correspondences betweeen a source and a target image
 
         self.correspondences = {}
         if correspondences is not None:
@@ -183,11 +191,13 @@ class Project(object):
 
         self.genet = Genet(self)
         self.region_attributes = RegionAttributes(**region_attributes)
-        
-        self.spatial_reference_system = spatial_reference_system        #if None we assume coordinates in pixels (but Y is up or down?!)
-        self.metadata = metadata                                        # project metadata => keyword -> value
-        self.image_metadata_template = image_metadata_template          # description of metadata keywords expected in images
-                                                                         # name: { type: (integer, date, string), mandatory: (true|false), default: ... }
+
+        self.spatial_reference_system = spatial_reference_system  # if None we assume coordinates in pixels (but Y is up or down?!)
+        self.metadata = metadata  # project metadata => keyword -> value
+        self.image_metadata_template = image_metadata_template  # description of metadata keywords expected in images
+        # name: { type: (integer, date, string), mandatory: (true|false), default: ... }
+
+        self.markers = markers  # Store alignment markers with 'ref' & 'coreg' images
 
     def importLabelsFromConfiguration(self, dictionary):
         """
@@ -195,11 +205,12 @@ class Project(object):
         """
         self.labels = {}
         if not 'Empty' in dictionary:
-            self.labels['Empty'] = Label(id='Empty', name='Empty', description=None, fill=[127, 127, 127], border=[200, 200, 200], visible=True)
+            self.labels['Empty'] = Label(id='Empty', name='Empty', description=None, fill=[127, 127, 127],
+                                         border=[200, 200, 200], visible=True)
         for key in dictionary.keys():
             color = dictionary[key]
-            self.labels[key] = Label(id=key, name=key, description=None, fill=color, border=[200, 200, 200], visible=True)
-
+            self.labels[key] = Label(id=key, name=key, description=None, fill=color, border=[200, 200, 200],
+                                     visible=True)
 
     # def checkDictionaryConsistency(self, labels):
     #     """
@@ -228,7 +239,6 @@ class Project(object):
     #
     #     return True
 
-
     def labelsInUse(self):
         """
         It returns the labels currently assigned to the annotations.
@@ -244,8 +254,7 @@ class Project(object):
         else:
             return list(class_names)
 
-
-    def save(self, filename = None):
+    def save(self, filename=None):
 
         # check inconsistencies. They can be caused by bugs during the regions update/editing
         if self.correspondences is not None:
@@ -254,7 +263,8 @@ class Project(object):
                     # there are inconsistencies, THIS MUST BE NOTIFIED
                     msgBox = QMessageBox()
                     msgBox.setWindowTitle("INCONSISTENT CORRESPONDENCES")
-                    msgBox.setText("Inconsistent correspondences has been found !!\nPlease, Notify this problem to the TagLab developers.")
+                    msgBox.setText(
+                        "Inconsistent correspondences has been found !!\nPlease, Notify this problem to the TagLab developers.")
                     msgBox.exec()
 
         data = self.__dict__
@@ -265,8 +275,6 @@ class Project(object):
         f = open(filename, "w")
         f.write(str)
         f.close()
-        #except Exception as a:
-        #    print(str(a))
 
     def loadDictionary(self, filename):
 
@@ -291,17 +299,20 @@ class Project(object):
         """
         Convert the list of labels into a labels dictionary.
         """
-
         self.labels = {}
-
         label_names = []
+
         for label in labels:
             label_names.append(label.name)
 
         # 'Empty' key must be be always present
         if not 'Empty' in label_names:
-            self.labels['Empty'] = Label(id='Empty', name='Empty', description=None, fill=[127, 127, 127],
-                                         border=[200, 200, 200], visible=True)
+            self.labels['Empty'] = Label(id='Empty',
+                                         name='Empty',
+                                         description=None,
+                                         fill=[127, 127, 127],
+                                         border=[200, 200, 200],
+                                         visible=True)
 
         for label in labels:
             self.labels[label.name] = label
@@ -320,9 +331,24 @@ class Project(object):
 
         if not blob.class_name in self.labels:
             print("Missing label for " + blob.class_name + ". Creating one.")
-            self.labels[blob.class_name] = Label(blob.class_name, blob.class_name, fill = [255, 0, 0])
+            random_color = [random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)]
+            self.labels[blob.class_name] = Label(blob.class_name, blob.class_name, fill=random_color)
 
         color = self.labels[blob.class_name].fill
+        brush = QBrush(QColor(color[0], color[1], color[2], 200))
+        return brush
+
+    def classBrushFromNamePoint(self, annpoint):
+        brush = QBrush()
+        if annpoint.class_name == "Empty":
+            return brush
+
+        if not annpoint.class_name in self.labels:
+            print("Missing label for " + annpoint.class_name + ". Creating one.")
+            random_color = [random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)]
+            self.labels[annpoint.class_name] = Label(annpoint.class_name, annpoint.class_name, fill=random_color)
+
+        color = self.labels[annpoint.class_name].fill
         brush = QBrush(QColor(color[0], color[1], color[2], 200))
         return brush
 
@@ -340,21 +366,24 @@ class Project(object):
         if self.images is not None:
             if len(self.images) > 1:
                 image_list = self.images
-#                image_list.sort(key=lambda x: datetime.date.fromisoformat(x.acquisition_date))
                 image_list.sort(key=lambda x: datetime.datetime.strptime(x.acquisition_date, '%Y-%m-%d'))
 
                 self.images = image_list
 
-    def addNewImage(self, image):
+    def addNewImage(self, image, sort=True):
         """
         Annotated images in the image list are sorted by date.
         """
         self.images.append(image)
-        self.orderImagesByAcquisitionDate()
+        if sort:
+            self.orderImagesByAcquisitionDate()
 
     def deleteImage(self, image):
         self.images = [i for i in self.images if i != image]
-        self.correspondences = {key: corr for key, corr in self.correspondences.items() if corr.source != image and corr.target != image}
+        self.correspondences = {key: corr for key, corr in self.correspondences.items() if
+                                corr.source != image and corr.target != image}
+        if image.id in self.markers:
+            del self.markers[image.id]
 
     def findCorrespondences(self, image):
 
@@ -368,8 +397,8 @@ class Project(object):
         """
         self.genet.updateGenets()
         corr = self.getImagePairCorrespondences(img_source_idx, img_target_idx)
-        #this is done in genet.py
-        #corr.updateGenets()
+        # this is done in genet.py
+        # corr.updateGenets()
         return corr
 
     def addBlob(self, image, blob):
@@ -383,7 +412,7 @@ class Project(object):
 
     def removeBlob(self, image, blob):
 
-        # updata image annotations
+        # updata image annotations (this are both blob and annpoints)
         image.annotations.removeBlob(blob)
 
         # update correspondences
@@ -425,7 +454,6 @@ class Project(object):
 
         return self.correspondences[key]
 
-
     def addCorrespondence(self, img_source_idx, img_target_idx, blobs1, blobs2):
         """
         Add a correspondences to the current ones.
@@ -434,15 +462,14 @@ class Project(object):
         corr = self.getImagePairCorrespondences(img_source_idx, img_target_idx)
         corr.set(blobs1, blobs2)
         self.genet.updateGenets()
-        #corr.updateGenets() moved to genet
-
+        # corr.updateGenets() moved to genet
 
     def updatePixelSizeInCorrespondences(self, image, flag_surface_area):
 
-        correspondences= self.findCorrespondences(image)
+        correspondences = self.findCorrespondences(image)
         for corr in correspondences:
             corr.updateAreas(use_surface_area=flag_surface_area)
-    
+
     def computeCorrespondences(self, img_source_idx, img_target_idx):
         """
         Compute the correspondences between an image pair.
@@ -456,9 +483,9 @@ class Project(object):
         blobs1 = []
         for blob in self.images[img_source_idx].annotations.seg_blobs:
             blob_c = blob.copy()
-            blob_c.bbox = (blob_c.bbox*conversion1).round().astype(int)
-            blob_c.contour = blob_c.contour*conversion1
-            blob_c.area = blob_c.area*conversion1*conversion1 / 100
+            blob_c.bbox = (blob_c.bbox * conversion1).round().astype(int)
+            blob_c.contour = blob_c.contour * conversion1
+            blob_c.area = blob_c.area * conversion1 * conversion1 / 100
             blobs1.append(blob_c)
 
         blobs2 = []
@@ -471,31 +498,34 @@ class Project(object):
 
         corr = self.getImagePairCorrespondences(img_source_idx, img_target_idx)
         corr.autoMatch(blobs1, blobs2)
+        # corr.autoMatchM(blobs1, blobs2)
+        # autoMatchM resolves matching taking into account
+        # live/dead specimens (class name constraint is removed)
 
         lines = corr.correspondences + corr.dead + corr.born
-        corr.data = pd.DataFrame(lines, columns=corr.data.columns)
-        corr.sort_data()
-        corr.correspondence = []
-        corr.dead = []
-        corr.born =[]
+
+        if len(lines) > 0:
+            corr.data = pd.DataFrame(lines, columns=corr.data.columns)
+            corr.sort_data()
+            corr.correspondence = []
+            corr.dead = []
+            corr.born = []
 
         self.genet.updateGenets()
-        #corr.updateGenets() moved to genet
-
+        # corr.updateGenets() moved to genet
 
     def create_labels_table(self, image):
-
-        '''
+        """
         It creates a data table for the label panel.
         If an active image is given, some statistics are added.
-        '''
-
+        """
         dict = {
-            'Visibility': np.zeros(len(self.labels), dtype=np.int32),
+            'Visibility': np.zeros(len(self.labels), dtype=int),
             'Color': [],
             'Class': [],
-            '#': np.zeros(len(self.labels), dtype=np.int32),
-            'Coverage': np.zeros(len(self.labels),dtype=np.float32)
+            '#R': np.zeros(len(self.labels), dtype=int),
+            '#P': np.zeros(len(self.labels), dtype=int),
+            'Coverage': np.zeros(len(self.labels), dtype=float)
         }
 
         for i, key in enumerate(list(self.labels.keys())):
@@ -506,18 +536,75 @@ class Project(object):
 
             if image is None:
                 count = 0
+                countP = 0
                 new_area = 0.0
             else:
                 count, new_area = image.annotations.calculate_perclass_blobs_value(label, image.pixelSize())
+                countP = image.annotations.countPoints(label)
 
-            dict['#'][i] = count
+            dict['#R'][i] = count
+            dict['#P'][i] = countP
             dict['Coverage'][i] = new_area
 
         # create dataframe
-        df = pd.DataFrame(dict, columns=['Visibility', 'Color', 'Class', '#', 'Coverage'])
+        df = pd.DataFrame(dict, columns=['Visibility', 'Color', 'Class', '#R', '#P', 'Coverage'])
         return df
 
+    def addOrUpdateMarkers(self, refImgId, refMarkers, coregImgId, coregMarkers, markersTypes):
+        """
+        Insert or Update markers ([x,y] positions) for registration purposes.
+        - Markers must have the following format [[x1,y1,w1], [x2,y2,w2], ...];
+        - The two lists must be parallel;
+        - Positions must be in pixels (relative to the image they are referring to);
+        - Weights must be the 'typ' identifier of the MarkerObjData class inside
+          the QtAlignmentWidget (MarkerObjData.SOFT_MARKER, MarkerObjData.HARD_MARKER);
+        :param refImgId: Id of the 'reference' image
+        :param refMarkers: List of markers on the 'reference' image
+        :param coregImgId: Id of the 'registered' image
+        :param coregMarkers: List of markers on the 'registered' image
+        :param markersTypes: List of markers types
+        :return: None
+        """
+        ref = self.images[refImgId]
+        coreg = self.images[coregImgId]
+        if ref.id not in self.markers:
+            self.markers[ref.id] = {}
+        self.markers[ref.id][coreg.id] = {
+            "markers": {
+                "ref": [{
+                    "x": x,
+                    "y": y,
+                } for [x, y] in refMarkers],
+                "coreg": [{
+                    "x": x,
+                    "y": y,
+                } for [x, y] in coregMarkers],
+                "type": [t for t in markersTypes],
+            }
+        }
 
+    def retrieveMarkersOrEmpty(self, refImgId, coregImgId):
+        """
+        Retrieves the markers list (if any) identifying the registration with:
+        - 'refImgId' as reference image;
+        - 'coregImgId' as registered image;
+        The markers list has the following format (for each marker):
+        - 'refPos' the [x,y] position (in pixel) on the 'ref' image;
+        - 'coregPos' the [x,y] position (in pixel) on the 'coreg' image;
+        - 'type' as the marker's type (ex. QtAlignmentWidget.MarkerObjData.SOFT_MARKER);
+        :param refImgId: Id of the 'reference' image
+        :param coregImgId: Id of the 'registered' image
+        :return: markers list or empty list
+        """
+        if refImgId not in self.markers:
+            return []
 
+        if coregImgId not in self.markers[refImgId]:
+            return []
 
-
+        markers = self.markers[refImgId][coregImgId]['markers']
+        return [{
+            'refPos': [r['x'], r['y']],
+            'coregPos': [c['x'], c['y']],
+            'type': t,
+        } for (r, c, t) in zip(markers['ref'], markers['coreg'], markers['type'])]

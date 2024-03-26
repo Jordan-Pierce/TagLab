@@ -1,8 +1,8 @@
-
+import os
 import numpy as np
 import json
 import ast
-from shapely.geometry import Polygon
+
 from osgeo import gdal, osr
 import osgeo.ogr as ogr
 import rasterio as rio
@@ -14,6 +14,8 @@ from source.Blob import Blob
 from source.Shape import Shape
 from source.Mask import subtract
 from numpy.linalg import inv
+import shapely
+from shapely.geometry import Polygon
 
 
 def changeFormat(contour, transform):
@@ -44,7 +46,7 @@ def changeFormatInv(coord, transform):
     # transformr = np.reshape(transform, (3, 3))
     # transformInv = inv(transformr)
     pointpixels = []
-    #va controllato se esiste
+    # va controllato se esiste
     if transform is not None:
         for points in coord[0]:
             xref = points[0]
@@ -52,6 +54,7 @@ def changeFormatInv(coord, transform):
             pointpix = ~transform * (xref, yref)
             pointpixels.append(pointpix)
         return pointpixels
+
 
 def changeFormatInvPoint(coord, transform):
     """
@@ -65,24 +68,24 @@ def changeFormatInvPoint(coord, transform):
 
 
 def createPolygon(blob, transform):
-
     # load blob.contour and transform coordinate
     exterior = changeFormat(blob.contour, transform)
     exteriorPolygon = Polygon(exterior)
 
-    inners=[]
+    inners = []
     for inner in blob.inner_contours:
-            interior=changeFormat(inner, transform)
-            innerPolygon = Polygon(interior)
-            inners.append(innerPolygon)
+        interior = changeFormat(inner, transform)
+        innerPolygon = Polygon(interior)
+        inners.append(innerPolygon)
     newPolygon = Polygon(exteriorPolygon.exterior.coords, [inner.exterior.coords for inner in inners])
 
     return newPolygon
 
 
 def createPolygonFromWorkingArea(working_area, transform):
-
-    wa_coord = [(working_area[1], working_area[0]), (working_area[1] + working_area[2], working_area[0]), (working_area[1] + working_area[2] , working_area[0] + working_area[3]),(working_area[1], working_area[0]+ working_area[3])]
+    wa_coord = [(working_area[1], working_area[0]), (working_area[1] + working_area[2], working_area[0]),
+                (working_area[1] + working_area[2], working_area[0] + working_area[3]),
+                (working_area[1], working_area[0] + working_area[3])]
 
     # load blob.contour and transform coordinate
     wa_coord_change = changeFormat(wa_coord, transform)
@@ -97,7 +100,7 @@ def read_attributes(filename):
     layer = dataSource.GetLayer(0)
     Data = pd.DataFrame()
     for feat in layer:
-        shpdict =json.loads(feat.ExportToJson())
+        shpdict = json.loads(feat.ExportToJson())
         properties = shpdict['properties']
         if Data.empty:
             Data = pd.DataFrame.from_dict([properties])
@@ -108,7 +111,6 @@ def read_attributes(filename):
 
 
 def read_regions_geometry(filename, georef_filename):
-
     img = rio.open(georef_filename)
     transform = img.transform
 
@@ -116,12 +118,11 @@ def read_regions_geometry(filename, georef_filename):
     dataSource = driver.Open(filename, 0)
     layer = dataSource.GetLayer(0)
 
-
-    #set spatial reference and transformation
+    # set spatial reference and transformation
     sourceprj = layer.GetSpatialRef()
-    targetprj = osr.SpatialReference(wkt = img.crs.wkt)
-    #need to check if sourceproj == targetproj
-    reproject = osr.CoordinateTransformation(sourceprj, targetprj) #this is a transform
+    targetprj = osr.SpatialReference(wkt=img.crs.wkt)
+    # need to check if sourceproj == targetproj
+    reproject = osr.CoordinateTransformation(sourceprj, targetprj)  # this is a transform
 
     blobList = []
     for feat in layer:
@@ -152,7 +153,6 @@ def read_regions_geometry(filename, georef_filename):
 
 
 def read_geometry(filename, georef_filename):
-
     img = rio.open(georef_filename)
     transform = img.transform
 
@@ -188,25 +188,30 @@ def read_geometry(filename, georef_filename):
     return shape_list
 
 
-
-def write_shapefile( project, image, blobs, georef_filename, out_shp):
+def write_shapefile(project, image, blobs, georef_filename, out_shp):
     """
-    https://gis.stackexchange.com/a/52708/8104
+    Writes the regions as a shapefile; modified so that if orthomosaic is not
+    georeferenced, a default EPSG (3857) will be used instead.
     """
     scale_factor = image.pixelSize()
     date = image.acquisition_date
-    # load georeference information to use
-    img = rio.open(georef_filename)
-    geoinfo = img.crs
-    transform = img.transform
     annotations = image.annotations
+
+    if os.path.exists(georef_filename):
+        # Load georeference information to use
+        img = rio.open(georef_filename)
+        geoinfo = img.crs
+        transform = img.transform
+    else:
+        # Use a default EPSG (3857) so the file can be written
+        geoinfo = rio.crs.CRS.from_epsg(3857)
+        transform = rio.transform.from_origin(0, 0, scale_factor, scale_factor)
 
     working_area = project.working_area
 
     if working_area is not None:
         # only the blobs inside the working area are considered
         blobs = annotations.calculate_inner_blobs(working_area)
-
 
     # create the list of visible instances
     name_list = []
@@ -221,10 +226,10 @@ def write_shapefile( project, image, blobs, georef_filename, out_shp):
 
     number_of_seg = len(name_list)
     dict = {
-        'TL_id': np.zeros(number_of_seg, dtype = np.int64),
+        'TL_id': np.zeros(number_of_seg, dtype=np.int64),
         'TL_Date': [],
         'TL_Class': [],
-        'TL_Genet': np.zeros(number_of_seg, dtype = np.int64),
+        'TL_Genet': np.zeros(number_of_seg, dtype=np.int64),
         'TL_Cx': np.zeros(number_of_seg),
         'TL_Cy': np.zeros(number_of_seg),
         'TL_Area': np.zeros(number_of_seg),
@@ -238,9 +243,9 @@ def write_shapefile( project, image, blobs, georef_filename, out_shp):
             dict[key] = []
         # elif attribute['type'] in ['number', 'boolean']:
         elif attribute['type'] in ['integer number']:
-            dict[key] = np.zeros(number_of_seg, dtype = np.int64)
+            dict[key] = np.zeros(number_of_seg, dtype=np.int64)
         elif attribute['type'] in ['decimal number']:
-            dict[key] = np.zeros(number_of_seg, dtype = np.float64)
+            dict[key] = np.zeros(number_of_seg, dtype=np.float64)
         else:
             # unknown attribute type, not saved
             pass
@@ -308,17 +313,16 @@ def write_shapefile( project, image, blobs, georef_filename, out_shp):
     outLayer = outDataSource.CreateLayer("polygon", srs, geom_type=ogr.wkbPolygon)
     OGRTypes = {int: ogr.OFTInteger, str: ogr.OFTString, float: ogr.OFTReal}
     defn = outLayer.GetLayerDefn()
+
     # Create attribute fields according to the data types
-
-
     for key in list(dict.keys()):
 
-            if type(dict[key]) == list:
-                outLayer.CreateField(ogr.FieldDefn(key, OGRTypes[str]))
-            elif dict[key].dtype == np.int64 or dict[key].dtype == np.int32:
-                outLayer.CreateField(ogr.FieldDefn(key, OGRTypes[int]))
-            else:
-                outLayer.CreateField(ogr.FieldDefn(key, OGRTypes[float]))
+        if type(dict[key]) == list:
+            outLayer.CreateField(ogr.FieldDefn(key, OGRTypes[str]))
+        elif dict[key].dtype == np.int64 or dict[key].dtype == np.int32:
+            outLayer.CreateField(ogr.FieldDefn(key, OGRTypes[int]))
+        else:
+            outLayer.CreateField(ogr.FieldDefn(key, OGRTypes[float]))
 
     for i in range(len(polygons)):
         feat = ogr.Feature(defn)
@@ -344,7 +348,6 @@ def write_shapefile( project, image, blobs, georef_filename, out_shp):
 
 
 def saveClippedTiff(input, blobs, georef_filename, name):
-
     # load georeference information to use
     img = rio.open(georef_filename)
     geoinfo = img.crs
@@ -363,15 +366,15 @@ def saveClippedTiff(input, blobs, georef_filename, name):
     out_meta = dataset.meta
     # area= out_meta['transform'][0] ** 2*out_image
     out_meta.update({"driver": "GTiff",
-                      "height": out_image.shape[1],
-                      "width": out_image.shape[2],
-                      "transform": out_transform})
+                     "height": out_image.shape[1],
+                     "width": out_image.shape[2],
+                     "transform": out_transform})
 
     with rio.open(name, "w", **out_meta) as dest:
         dest.write(out_image)
 
-def saveGeorefLabelMap(label_map, georef_filename, working_area, out_name):
 
+def saveGeorefLabelMap(label_map, georef_filename, working_area, out_name):
     # create a georeferenced label image (as raster)
     img = rio.open(georef_filename)
     meta = img.meta
@@ -382,6 +385,7 @@ def saveGeorefLabelMap(label_map, georef_filename, working_area, out_name):
     myLabel_meta.update({"dtype": rio.uint8,
                          "count": 3,
                          "nodata": None})
+
     with rio.open(out_name + ".tif", "w", **myLabel_meta) as dest:
         dest.write(myLabel)
 
@@ -393,47 +397,48 @@ def saveGeorefLabelMap(label_map, georef_filename, working_area, out_name):
     out_meta = dataset.meta
     # area= out_meta['transform'][0] ** 2*out_image
     out_meta.update({"driver": "GTiff",
-                      "height": out_image.shape[1],
-                      "width": out_image.shape[2],
-                      "transform": out_transform})
+                     "height": out_image.shape[1],
+                     "width": out_image.shape[2],
+                     "transform": out_transform})
 
     with rio.open(out_name + ".tif", "w", **out_meta) as dest:
         dest.write(out_image)
 
-def exportSlope(raster, filename):
 
+def exportSlope(raster, filename):
     # process slope raster and save it
     # IMPORTANT NOTE: DEMprocessing using the INTERNAL scale of the GeoTiff, so the
     # geo transform MUST BE CORRECT to obtain a reliable calculation of the slope !!
     gdal.DEMProcessing(filename, raster, 'slope')
     with rio.open(filename) as dataset:
-         slope = dataset.read(1).astype(np.float32)
+        slope = dataset.read(1).astype(np.float32)
     return slope
+
 
 def calculateAreaUsingSlope(depth_filename, blobs):
     """'Outputs areas as number of pixels"""
 
     slope = exportSlope(depth_filename, 'slope.tif')
-    height= slope.shape[0]
+    height = slope.shape[0]
     width = slope.shape[1]
 
     # filter out null values and jumps
     slope[slope > 87] = 0
 
     for blob in blobs:
-        blob_copy= blob.copy()
+        blob_copy = blob.copy()
         if blob_copy.bbox[0] < 0:
-           blob_copy.bbox[3] = blob_copy.bbox[0] + blob_copy.bbox[3]
-           blob_copy.bbox[0] = 0
+            blob_copy.bbox[3] = blob_copy.bbox[0] + blob_copy.bbox[3]
+            blob_copy.bbox[0] = 0
 
         if blob_copy.bbox[1] < 0:
             blob_copy.bbox[2] = blob_copy.bbox[0] + blob_copy.bbox[2]
             blob_copy.bbox[1] = 0
 
         if blob_copy.bbox[1] + blob_copy.bbox[2] > width - 1:
-           blob_copy.bbox[2] = width - 1 - blob_copy.bbox[1]
+            blob_copy.bbox[2] = width - 1 - blob_copy.bbox[1]
 
-        if blob_copy.bbox[0] + blob_copy.bbox[3] > height-1:
+        if blob_copy.bbox[0] + blob_copy.bbox[3] > height - 1:
             blob_copy.bbox[3] = height - 1 - blob_copy.bbox[0]
 
         non_null = blob_copy.getMask()

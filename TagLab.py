@@ -31,13 +31,13 @@ import numpy as np
 import urllib
 import platform
 
-from PyQt5.QtCore import Qt, QSize, QMargins, QDir, QPoint, QPointF, QRectF, QTimer
-from PyQt5.QtCore import pyqtSlot, pyqtSignal, QSettings, QFileInfo, QModelIndex
+from PyQt5.QtCore import Qt, QSize, QMargins, QDir, QPoint, QPointF, QRectF, QTimer, pyqtSlot, pyqtSignal, QSettings, \
+    QFileInfo, QModelIndex
 from PyQt5.QtGui import QFontDatabase, QFont, QPixmap, QIcon, QKeySequence, QPen, QImageReader, QImage
-from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow, QFileDialog, QComboBox, QMenuBar, QAction
-from PyQt5.QtWidgets import QMenu, QSizePolicy, QScrollArea, QLabel, QToolButton, QPushButton, QSlider, QCheckBox
-from PyQt5.QtWidgets import QMessageBox, QGroupBox, QLayout, QHBoxLayout, QVBoxLayout, QFrame, QDockWidget, QTextEdit
-
+from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow, QFileDialog, QComboBox, QMenuBar, QMenu, QSizePolicy, \
+    QScrollArea, \
+    QLabel, QToolButton, QPushButton, QSlider, QCheckBox, \
+    QMessageBox, QGroupBox, QLayout, QHBoxLayout, QVBoxLayout, QFrame, QDockWidget, QTextEdit, QAction
 
 import pprint
 # PYTORCH
@@ -52,6 +52,7 @@ except Exception as e:
 # exit()
 
 # CUSTOM
+import csv
 import source.Mask as Mask
 import source.RasterOps as rasterops
 from source.QtImageViewerPlus import QtImageViewerPlus
@@ -67,14 +68,17 @@ from source.QtProgressBarCustom import QtProgressBarCustom
 from source.QtHistogramWidget import QtHistogramWidget
 from source.QtClassifierWidget import QtClassifierWidget
 from source.QtNewDatasetWidget import QtNewDatasetWidget
+from source.QtSampleWidget import QtSampleWidget
 from source.QtTrainingResultsWidget import QtTrainingResultsWidget
 from source.QtTYNWidget import QtTYNWidget
 from source.QtComparePanel import QtComparePanel
 from source.QtTablePanel import QtTablePanel
+from source.QtExportAnnAsTable import QtExportAnnAsTable
 from source.QtTableLabel import QtTableLabel
 from source.QtProjectWidget import QtProjectWidget
 from source.QtProjectEditor import QtProjectEditor
 from source.Project import Project, loadProject
+from source.Point import Point
 from source.Image import Image
 from source.MapClassifier import MapClassifier
 from source.NewDataset import NewDataset
@@ -83,16 +87,18 @@ from source.QtDictionaryWidget import QtDictionaryWidget
 from source.QtRegionAttributesWidget import QtRegionAttributesWidget
 from source.QtShapefileAttributeWidget import QtAttributeWidget
 from source.QtPanelInfo import QtPanelInfo
-from source.QtiView import QtiView
+from source.Sampler import Sampler
 
-from source import utils
+from source.QtiView import QtiViewWidget
+from source.QtCoralNetToolbox import CoralNetToolboxWidget
+
+from source import genutils
 from source.Blob import Blob
 from source.Shape import Layer, Shape
 
 # training modules
+from models.coral_dataset import CoralsDataset
 import models.training as training
-
-
 
 # LOGGING
 import logging
@@ -141,14 +147,11 @@ class TagLab(QMainWindow):
 
         current_version, need_to_update = self.checkNewVersion()
         if need_to_update:
-            ans = input("New version available. Do you want to install? [Y/n]")
-            if ans.strip().lower() == 'y':
-                print("Exiting program; please run update.py")
-                sys.exit(0)
+            pass
 
         ##### DATA INITIALIZATION AND SETUP #####
 
-        self.taglab_dir = os.path.dirname(__file__)
+        self.taglab_dir = os.getcwd()
 
         self.TAGLAB_VERSION = "TagLab " + current_version
 
@@ -159,7 +162,7 @@ class TagLab(QMainWindow):
 
         # LOAD CONFIGURATION FILE
 
-        f = open(os.path.join(self.taglab_dir, "config.json"), "r")
+        f = open("config.json", "r")
         config_dict = json.load(f)
         self.available_classifiers = config_dict["Available Classifiers"]
 
@@ -179,11 +182,11 @@ class TagLab(QMainWindow):
         ##### INTERFACE #####
         #####################
 
-        self.imageWidget = None
         self.mapWidget = None
         self.projectEditor = None
         self.alignToolWidget = None
         self.editProjectWidget = None
+        self.samplePointWidget = None
         self.scale_widget = None
         self.dictionary_widget = None
         self.working_area_widget = None
@@ -193,7 +196,6 @@ class TagLab(QMainWindow):
 
         # Additional features
         self.iViewWidget = None
-
 
         self.trainYourNetworkWidget = None
         self.trainResultsWidget = None
@@ -218,27 +220,29 @@ class TagLab(QMainWindow):
         """
 
         self.btnMove = self.newButton("move.png", "Move", flatbuttonstyle1, self.move)
-        self.btnAssign = self.newButton("bucket.png", "Assign class", flatbuttonstyle1,
-                                        self.assign)
-        self.btnEditBorder = self.newButton("edit.png", "Edit border", flatbuttonstyle1,
-                                            self.editBorder)
-        self.btnCut = self.newButton("scissors.png", "Cut segmentation", flatbuttonstyle1,
-                                     self.cut)
+        self.btnPoint = self.newButton("point.png", "Place annotation point", flatbuttonstyle1, self.placeAnnPoint)
+        self.btnAssign = self.newButton("bucket.png", "Assign class", flatbuttonstyle1, self.assign)
+        self.btnEditBorder = self.newButton("edit.png", "Edit border", flatbuttonstyle1, self.editBorder)
+        self.btnCut = self.newButton("scissors.png", "Cut segmentation", flatbuttonstyle1, self.cut)
         self.btnFreehand = self.newButton("pencil.png", "Freehand segmentation", flatbuttonstyle1,
                                           self.freehandSegmentation)
-        self.btnCreateCrack = self.newButton("crack.png", "Create crack", flatbuttonstyle1,
-                                             self.createCrack)
+        self.btnCreateCrack = self.newButton("crack.png", "Create crack", flatbuttonstyle1, self.createCrack)
         self.btnWatershed = self.newButton("brush.png", "Watershed segmentation", flatbuttonstyle1,
                                            self.watershedSegmentation)
-        self.btnBricksSegmentation = self.newButton("brick.png", "Bricks segmentation",
-                                                    flatbuttonstyle2, self.bricksSegmentation)
+        self.btnBricksSegmentation = self.newButton("brick.png", "Bricks segmentation", flatbuttonstyle2,
+                                                    self.bricksSegmentation)
 
         # Split blob operation removed from the toolbar
-        # self.btnSplitBlob = self.newButton("split.png", "Split Blob", flatbuttonstyle1, self.splitBlob)
+        # self.btnSplitBlob   = self.newButton("split.png",    "Split Blob",            flatbuttonstyle1, self.splitBlob)
 
         self.btnRuler = self.newButton("ruler.png", "Measure tool", flatbuttonstyle1, self.ruler)
-        self.btnDeepExtreme = self.newButton("dexter.png", "4-clicks segmentation", flatbuttonstyle2, self.deepExtreme)
+        self.btnFourClicks = self.newButton("dexter.png", "4-clicks segmentation", flatbuttonstyle2, self.fourClicks)
         self.btnRitm = self.newButton("ritm.png", "Positive/negative clicks segmentation", flatbuttonstyle2, self.ritm)
+
+        # Additional features
+        # self.btnSamInteractive = self.newButton("saminteractive2.png", "Box and clicks segmentation", flatbuttonstyle2, self.saminteractive)
+        # self.btnSam = self.newButton("sam.png", "Segment everything", flatbuttonstyle2, self.sam)
+
         self.btnAutoClassification = self.newButton("auto.png", "Fully auto semantic segmentation", flatbuttonstyle2,
                                                     self.selectClassifier)
 
@@ -247,15 +251,14 @@ class TagLab(QMainWindow):
         self.btnSAMGenerator = self.newButton("sam_gen.png", "SAM Generator", flatbuttonstyle2, self.samGenerator)
         self.btniView = self.newButton("iview.png", "iView", flatbuttonstyle2, self.iView)
 
-
         # Split Screen operation removed from the toolbar
-        self.pxmapSeparator = QPixmap(os.path.join(os.path.join(self.taglab_dir, "icons"), "separator.png"))
+        self.pxmapSeparator = QPixmap("icons/separator.png")
         self.labelSeparator = QLabel()
         self.labelSeparator.setPixmap(self.pxmapSeparator.scaled(QSize(35, 30)))
         self.btnCreateGrid = self.newButton("grid.png", "Create grid", flatbuttonstyle1, self.createGrid)
         self.btnGrid = self.newButton("grid-edit.png", "Active/disactive grid operations", flatbuttonstyle1,
                                       self.toggleGrid)
-        self.pxmapSeparator2 = QPixmap(os.path.join(os.path.join(self.taglab_dir, "icons"), "separator.png"))
+        self.pxmapSeparator2 = QPixmap("icons/separator.png")
         self.labelSeparator2 = QLabel()
         self.labelSeparator2.setPixmap(self.pxmapSeparator2.scaled(QSize(35, 30)))
 
@@ -270,12 +273,15 @@ class TagLab(QMainWindow):
         layout_tools = QVBoxLayout()
         layout_tools.setSpacing(0)
         layout_tools.addWidget(self.btnMove)
-        layout_tools.addWidget(self.btnDeepExtreme)
+        layout_tools.addWidget(self.btnPoint)
+        # layout_tools.addWidget(self.btnSamInteractive)
+        layout_tools.addWidget(self.btnFourClicks)
         layout_tools.addWidget(self.btnRitm)
+        # layout_tools.addWidget(self.btnSam)
         layout_tools.addWidget(self.btnFreehand)
         layout_tools.addWidget(self.btnAssign)
         # layout_tools.addWidget(self.btnWatershed)
-        layout_tools.addWidget(self.btnBricksSegmentation)
+        # layout_tools.addWidget(self.btnBricksSegmentation)
         layout_tools.addWidget(self.btnEditBorder)
         layout_tools.addWidget(self.btnCut)
         layout_tools.addWidget(self.btnCreateCrack)
@@ -303,8 +309,7 @@ class TagLab(QMainWindow):
         # CONTEXT MENU ACTIONS
 
         self.markEmpty = self.newAction("Mark cell as empty", "", self.markEmptyOperation)
-        self.markIncomplete = self.newAction("Mark cell as incomplete", "",
-                                             self.markIncompleteOperation)
+        self.markIncomplete = self.newAction("Mark cell as incomplete", "", self.markIncompleteOperation)
         self.markComplete = self.newAction("Mark cell as complete", "", self.markCompleteOperation)
         self.addNote = self.newAction("Add/edit note", "", self.addNoteOperation)
 
@@ -314,6 +319,7 @@ class TagLab(QMainWindow):
         self.divideAction = self.newAction("Divide Labels", "D", self.divide)
         self.subtractAction = self.newAction("Subtract Labels", "S", self.subtract)
         self.refineAction = self.newAction("Refine Border", "R", self.refineBorderOperation)
+        self.refineAllAction = self.newAction("Refine All Borders", "", self.refineBorderAll)
         self.dilateAction = self.newAction("Dilate Border", "+", self.dilate)
         self.erodeAction = self.newAction("Erode Border", "-", self.erode)
         self.attachBoundariesAction = self.newAction("Attach Boundaries", "B", self.attachBoundaries)
@@ -326,7 +332,7 @@ class TagLab(QMainWindow):
         self.viewerplus.logfile = logfile
         self.viewerplus.viewUpdated.connect(self.updateViewInfo)
         self.viewerplus.activated.connect(self.setActiveViewer)
-        self.viewerplus.updateInfoPanel[Blob].connect(self.updatePanelInfo)
+        self.viewerplus.updateInfoPanel.connect(self.updatePanelInfo)
         self.viewerplus.mouseMoved[float, float].connect(self.updateMousePos)
         self.viewerplus.selectionChanged.connect(self.updateEditActions)
         self.viewerplus.selectionReset.connect(self.resetPanelInfo)
@@ -336,7 +342,7 @@ class TagLab(QMainWindow):
         self.viewerplus2.logfile = logfile
         self.viewerplus2.viewUpdated.connect(self.updateViewInfo)
         self.viewerplus2.activated.connect(self.setActiveViewer)
-        self.viewerplus2.updateInfoPanel[Blob].connect(self.updatePanelInfo)
+        self.viewerplus2.updateInfoPanel.connect(self.updatePanelInfo)
         self.viewerplus2.mouseMoved[float, float].connect(self.updateMousePos)
         self.viewerplus2.selectionChanged.connect(self.updateEditActions)
         self.viewerplus2.selectionReset.connect(self.resetPanelInfo)
@@ -345,6 +351,11 @@ class TagLab(QMainWindow):
         self.viewerplus2.newSelection.connect(self.showMatch)
 
         self.viewerplus.newSelection.connect(self.showBlobOnTable)
+
+        self.viewerplus.newSelectionPoint.connect(self.showPointOnTable)
+
+        self.viewerplus.tools.tools["SAM"].samEnded.connect(self.resetSam)
+        self.viewerplus2.tools.tools["SAM"].samEnded.connect(self.resetSam)
 
         # last activated viewerplus: redirect here context menu commands and keyboard commands
         self.activeviewer = None
@@ -405,8 +416,10 @@ class TagLab(QMainWindow):
         self.labelZoom = QLabel("Zoom:")
         self.labelMouseLeft = QLabel("x:")
         self.labelMouseTop = QLabel("y:")
+
+        # Additional Features
         # Users want to know in pixels the
-        # view dimensions to assist with tools
+        # view dimensions to assist with labeling
         self.labelViewWidth = QLabel("w:")
         self.labelViewHeight = QLabel("h:")
 
@@ -418,6 +431,8 @@ class TagLab(QMainWindow):
         self.labelZoomInfo.setMinimumWidth(70)
         self.labelMouseLeftInfo.setMinimumWidth(70)
         self.labelMouseTopInfo.setMinimumWidth(70)
+
+        # Additional Features
         self.labelViewWidthInfo.setMinimumWidth(70)
         self.labelViewHeightInfo.setMinimumWidth(70)
 
@@ -440,6 +455,8 @@ class TagLab(QMainWindow):
         layout_header.addWidget(self.labelMouseLeftInfo)
         layout_header.addWidget(self.labelMouseTop)
         layout_header.addWidget(self.labelMouseTopInfo)
+
+        # Additional Features
         layout_header.addWidget(self.labelViewWidth)
         layout_header.addWidget(self.labelViewWidthInfo)
         layout_header.addWidget(self.labelViewHeight)
@@ -472,7 +489,7 @@ class TagLab(QMainWindow):
         self.default_dictionary = self.settings_widget.settings.value("default-dictionary",
                                                                       defaultValue="dictionaries/scripps.json",
                                                                       type=str)
-        self.project.loadDictionary(os.path.join(self.taglab_dir, self.default_dictionary))
+        self.project.loadDictionary(self.default_dictionary)
         self.labels_widget.setLabels(self.project, None)
 
         groupbox_style = "QGroupBox\
@@ -510,7 +527,7 @@ class TagLab(QMainWindow):
 
         # SINGLE-VIEW DATA PANEL
         self.data_panel = QtTablePanel()
-        self.data_panel.selectionChanged.connect(self.showBlobOnViewer)
+        self.data_panel.selectionChanged.connect(self.showOnViewer)
         self.data_panel.selectionChanged.connect(self.updatePanelInfoSelected)
 
         self.groupbox_comparison = QGroupBox()
@@ -526,6 +543,7 @@ class TagLab(QMainWindow):
 
         # BLOB INFO
         self.groupbox_blobpanel = QtPanelInfo(self.project.region_attributes)
+        self.blob_with_info_displayed = None
 
         # MAP VIEWER
         self.mapviewer = QtMapViewer(350)
@@ -552,7 +570,7 @@ class TagLab(QMainWindow):
         self.datadock.setWidget(self.groupbox_comparison)
         self.groupbox_comparison.setStyleSheet("padding: 0px")
 
-        self.blobdock = QDockWidget("Region Info", self)
+        self.blobdock = QDockWidget("Info and Attributes", self)
         self.blobdock.setWidget(self.groupbox_blobpanel)
 
         self.mapdock = QDockWidget("Map Preview", self)
@@ -600,29 +618,21 @@ class TagLab(QMainWindow):
 
         # EVENTS-CONNECTIONS
 
-        self.settings_widget.general_settings.researchFieldChanged[str].connect(
-            self.researchFieldChanged)
+        self.settings_widget.general_settings.researchFieldChanged[str].connect(self.researchFieldChanged)
         self.settings_widget.general_settings.autosaveInfoChanged[int].connect(self.setAutosave)
 
-        self.settings_widget.drawing_settings.borderPenChanged[str, int].connect(
-            self.viewerplus.setBorderPen)
-        self.settings_widget.drawing_settings.selectionPenChanged[str, int].connect(
-            self.viewerplus.setSelectionPen)
-        self.settings_widget.drawing_settings.workingAreaPenChanged[str, int].connect(
-            self.viewerplus.setWorkingAreaPen)
-        self.settings_widget.drawing_settings.borderPenChanged[str, int].connect(
-            self.viewerplus2.setBorderPen)
-        self.settings_widget.drawing_settings.selectionPenChanged[str, int].connect(
-            self.viewerplus2.setSelectionPen)
+        self.settings_widget.drawing_settings.borderPenChanged[str, int].connect(self.viewerplus.setBorderPen)
+        self.settings_widget.drawing_settings.selectionPenChanged[str, int].connect(self.viewerplus.setSelectionPen)
+        self.settings_widget.drawing_settings.workingAreaPenChanged[str, int].connect(self.viewerplus.setWorkingAreaPen)
+        self.settings_widget.drawing_settings.borderPenChanged[str, int].connect(self.viewerplus2.setBorderPen)
+        self.settings_widget.drawing_settings.selectionPenChanged[str, int].connect(self.viewerplus2.setSelectionPen)
         self.settings_widget.drawing_settings.workingAreaPenChanged[str, int].connect(
             self.viewerplus2.setWorkingAreaPen)
 
         self.connectLabelsPanelWithViewers()
 
-        self.viewerplus.viewHasChanged[float, float, float].connect(
-            self.viewerplus2.setViewParameters)
-        self.viewerplus2.viewHasChanged[float, float, float].connect(
-            self.viewerplus.setViewParameters)
+        self.viewerplus.viewHasChanged[float, float, float].connect(self.viewerplus2.setViewParameters)
+        self.viewerplus2.viewHasChanged[float, float, float].connect(self.viewerplus.setViewParameters)
 
         self.viewerplus.customContextMenuRequested.connect(self.openContextMenu)
         self.viewerplus2.customContextMenuRequested.connect(self.openContextMenu)
@@ -642,8 +652,9 @@ class TagLab(QMainWindow):
         self.dataset_train = None
 
         # NETWORKS
-        self.deepextreme_net = None
         self.classifier = None
+
+        # Additional Features
         self.sampredictor_net = None
         self.samgenerator_net = None
 
@@ -660,7 +671,6 @@ class TagLab(QMainWindow):
 
         self.split_screen_flag = False
         self.update_panels_flag = True
-        self.counter = 0
         self.disableSplitScreen()
 
         self.setGuiPreferences()
@@ -695,8 +705,7 @@ class TagLab(QMainWindow):
         raw_link = 'https://raw.githubusercontent.com/' + github_repo + 'main/TAGLAB_VERSION'
 
         # read offline version
-        taglab_version_file = os.path.join(os.path.dirname(__file__), "TAGLAB_VERSION")
-        f_off_version = open(taglab_version_file, "r")
+        f_off_version = open("TAGLAB_VERSION", "r")
         taglab_offline_version = f_off_version.read()
 
         # print('Raw link: ' + raw_link)
@@ -732,7 +741,10 @@ class TagLab(QMainWindow):
     # just to make the code less verbose
     def newAction(self, text, shortcut, callback):
         action = QAction(text, self)
-        action.setShortcut(QKeySequence(shortcut))
+
+        if shortcut != "":
+            action.setShortcut(QKeySequence(shortcut))
+
         # compatibility with Qt < 5.10
         if hasattr(action, 'setShortcutVisibleInContextMenu'):
             action.setShortcutVisibleInContextMenu(True)
@@ -751,7 +763,7 @@ class TagLab(QMainWindow):
         button.setStyleSheet(style)
         button.setMinimumWidth(ICON_SIZE)
         button.setMinimumHeight(ICON_SIZE)
-        button.setIcon(QIcon(os.path.join(os.path.join(self.taglab_dir, "icons"), icon)))
+        button.setIcon(QIcon(os.path.join("icons", icon)))
         button.setIconSize(QSize(ICON_SIZE, ICON_SIZE))
         button.setMaximumWidth(BUTTON_SIZE)
         button.setToolTip(tooltip)
@@ -787,20 +799,17 @@ class TagLab(QMainWindow):
     @pyqtSlot()
     def markEmptyOperation(self):
         if self.contextMenuPosition is not None:
-            self.activeviewer.updateCellState(self.contextMenuPosition.x(),
-                                              self.contextMenuPosition.y(), 0)
+            self.activeviewer.updateCellState(self.contextMenuPosition.x(), self.contextMenuPosition.y(), 0)
 
     @pyqtSlot()
     def markIncompleteOperation(self):
         if self.contextMenuPosition is not None:
-            self.activeviewer.updateCellState(self.contextMenuPosition.x(),
-                                              self.contextMenuPosition.y(), 1)
+            self.activeviewer.updateCellState(self.contextMenuPosition.x(), self.contextMenuPosition.y(), 1)
 
     @pyqtSlot()
     def markCompleteOperation(self):
         if self.contextMenuPosition is not None:
-            self.activeviewer.updateCellState(self.contextMenuPosition.x(),
-                                              self.contextMenuPosition.y(), 2)
+            self.activeviewer.updateCellState(self.contextMenuPosition.x(), self.contextMenuPosition.y(), 2)
 
     @pyqtSlot()
     def addNoteOperation(self):
@@ -930,8 +939,7 @@ class TagLab(QMainWindow):
         saveAsAct.triggered.connect(self.saveAsProject)
 
         for i in range(self.maxRecentFiles):
-            self.recentFileActs.append(
-                QAction(self, visible=False, triggered=self.openRecentProject))
+            self.recentFileActs.append(QAction(self, visible=False, triggered=self.openRecentProject))
 
         newMapAct = QAction("Add New Map...", self)
         newMapAct.setShortcut('Ctrl+L')
@@ -954,61 +962,55 @@ class TagLab(QMainWindow):
         regionAttributesAct = QAction("Region Attributes...", self)
         regionAttributesAct.triggered.connect(self.editRegionAttributes)
 
-        setWorkingAreaAct = QAction("Set Working Area", self)
-        setWorkingAreaAct.triggered.connect(self.selectWorkingArea)
-
         ### IMPORT
 
         appendAct = QAction("Add Another Project", self)
-        appendAct.setStatusTip(
-            "Add to the current project the annotated images of another project")
+        appendAct.setStatusTip("Add to the current project the annotated images of another project")
         appendAct.triggered.connect(self.importAnnotations)
 
         importAct = QAction("Import Label Image", self)
-        importAct.setStatusTip("Import a Label Image")
+        importAct.setStatusTip("Import a label image")
         importAct.triggered.connect(self.importLabelMap)
 
         importShap = QAction("Import Shapefile", self)
-        importShap.setStatusTip("Import a Georeferenced Shapefile")
+        importShap.setStatusTip("Import a georeferenced shapefile")
         importShap.triggered.connect(self.importShapefile)
 
         ### EXPORT
 
         exportDataTableAct = QAction("Export Annotations As Data Table", self)
         # exportDataTableAct.setShortcut('Ctrl+??')
-        exportDataTableAct.setStatusTip("Export current annotations as CSV table")
+        exportDataTableAct.setStatusTip("Export annotations as CSV table")
         exportDataTableAct.triggered.connect(self.exportAnnAsDataTable)
 
-        exportMapAct = QAction("Export Annotations As Labeled Image", self)
+        exportMapAct = QAction("Export Regions As Labeled Image", self)
         # exportMapAct.setShortcut('Ctrl+??')
-        exportMapAct.setStatusTip("Export Current Annotations As Labeled Image")
+        exportMapAct.setStatusTip("Export visibile regions as labeled image")
         exportMapAct.triggered.connect(self.exportAnnAsMap)
 
-        exportHistogramAct = QAction("Export Histogram", self)
+        exportHistogramAct = QAction("Export Histogram From Regions", self)
         # exportHistogramAct.setShortcut('Ctrl+??')
-        exportHistogramAct.setStatusTip("Export Histogram")
+        exportHistogramAct.setStatusTip("Export histogram from regions")
         exportHistogramAct.triggered.connect(self.exportHistogramFromAnn)
 
-        exportShapefilesAct = QAction("Export As Shapefile", self)
+        exportShapefilesAct = QAction("Export Regions As Shapefile", self)
         # exportShapefilesAct.setShortcut('Ctrl+??')
-        exportShapefilesAct.setStatusTip("Export Current Annotations As Shapefile")
+        exportShapefilesAct.setStatusTip("Export visible regions as shapefile")
         exportShapefilesAct.triggered.connect(self.exportAnnAsShapefiles)
 
-        exportGeoRefLabelMapAct = QAction("Export Annotations As A GeoTiff", self)
+        exportGeoRefLabelMapAct = QAction("Export Regions As A GeoTiff", self)
         # exportShapefilesAct.setShortcut('Ctrl+??')
-        exportGeoRefLabelMapAct.setStatusTip("Create A Label Image And Export It As A GeoTiff")
+        exportGeoRefLabelMapAct.setStatusTip("Create a label image and export it as a GeoTiff")
         exportGeoRefLabelMapAct.triggered.connect(self.exportGeoRefLabelMap)
 
         exportTrainingDatasetAct = QAction("Export New Training Dataset", self)
         # exportTrainingDatasetAct.setShortcut('Ctrl+??')
-        exportTrainingDatasetAct.setStatusTip(
-            "Export A New Training Dataset Based On The Current Annotations")
+        exportTrainingDatasetAct.setStatusTip("Export A new training dataset based on the current annotations")
         exportTrainingDatasetAct.triggered.connect(self.exportAnnAsTrainingDataset)
 
         trainYourNetworkAct = QAction("Train Your Network", self)
         # exportTrainingDatasetAct.setShortcut('Ctrl+??')
-        trainYourNetworkAct.setStatusTip(
-            "Export A new training dataset and, eventually, train your network on it")
+        trainYourNetworkAct.setStatusTip("Export A new training dataset and, eventually, train your network on it")
         trainYourNetworkAct.triggered.connect(self.trainYourNetwork)
 
         settingsAct = QAction("Settings..", self)
@@ -1089,19 +1091,51 @@ class TagLab(QMainWindow):
         self.projectmenu.addAction(newMapAct)
         self.projectmenu.addAction(projectEditorAct)
         self.projectmenu.addSeparator()
-        self.projectmenu.addAction(setWorkingAreaAct)
-        self.projectmenu.addSeparator()
         self.projectmenu.addAction(alignToolAct)
         self.projectmenu.addSeparator()
         self.projectmenu.addAction(createDicAct)
         self.projectmenu.addSeparator()
         self.projectmenu.addAction(regionAttributesAct)
 
+        ###### POINT ANN MENU
+
+        setWorkingAreaAct = QAction("Set / Delete Working Area", self)
+        setWorkingAreaAct.triggered.connect(self.selectWorkingArea)
+
+        samplePointsAct = QAction("Sample Points On Map / Area", self)
+        samplePointsAct.setStatusTip("Sample Points")
+        samplePointsAct.triggered.connect(self.chooseSampling)
+
+        importPointsAct = QAction("Import CoralNet Point Annotations", self)
+        importPointsAct.setStatusTip("Import Point Annotations From .CSV")
+        importPointsAct.triggered.connect(self.importCoralNetPointAnn)
+
+        exportPointsAct = QAction("Export CoralNet Point Annotations", self)
+        exportPointsAct.setStatusTip("Export Point Annotations As .CSV")
+        exportPointsAct.triggered.connect(self.exportCoralNetPointAnn)
+
+        exportCoralNetDataAct = QAction("Export Tiled Data for CoralNet", self)
+        exportCoralNetDataAct.setStatusTip("Export Data for CoralNet Model Training")
+        exportCoralNetDataAct.triggered.connect(self.exportCoralNetPointData)
+
+        openCoralNetToolboxAct = QAction("Open CoralNet-Toolbox...", self)
+        openCoralNetToolboxAct.triggered.connect(self.openCoralNetToolbox)
+
+        self.pointmenu = menubar.addMenu("&Points")
+        self.pointmenu.setStyleSheet(styleMenu)
+        self.pointmenu.addAction(setWorkingAreaAct)
+        self.pointmenu.addAction(samplePointsAct)
+        self.pointmenu.addSeparator()
+        self.pointmenu.addAction(importPointsAct)
+        self.pointmenu.addAction(exportPointsAct)
+        self.pointmenu.addAction(exportCoralNetDataAct)
+        self.pointmenu.addSeparator()
+        self.pointmenu.addAction(openCoralNetToolboxAct)
+
         ###### DEM MENU
 
         calculateSurfaceAreaAct = QAction("Calculate Surface Area", self)
-        calculateSurfaceAreaAct.setStatusTip(
-            "Estimate surface area using slope derived from the DEM")
+        calculateSurfaceAreaAct.setStatusTip("Estimate surface area using slope derived from the DEM")
         calculateSurfaceAreaAct.triggered.connect(self.calculateAreaUsingSlope)
 
         exportClippedRasterAct = QAction("Export Clipped Raster", self)
@@ -1133,6 +1167,7 @@ class TagLab(QMainWindow):
         self.editmenu.addAction(self.fillAction)
         self.editmenu.addSeparator()
         self.editmenu.addAction(self.refineAction)
+        self.editmenu.addAction(self.refineAllAction)
         self.editmenu.addAction(self.dilateAction)
         self.editmenu.addAction(self.erodeAction)
 
@@ -1260,10 +1295,8 @@ class TagLab(QMainWindow):
                     self.crop_widget.btnApply.clicked.connect(lambda x, img=img: self.cropImage)
                     selection_tool = self.activeviewer.tools.tools["SELECTAREA"]
                     selection_tool.setAreaStyle("WORKING")
-                    selection_tool.rectChanged[int, int, int, int].connect(
-                        self.crop_widget.updateArea)
-                    self.crop_widget.areaChanged[int, int, int, int].connect(
-                        selection_tool.setSelectionRectangle)
+                    selection_tool.rectChanged[int, int, int, int].connect(self.crop_widget.updateArea)
+                    self.crop_widget.areaChanged[int, int, int, int].connect(selection_tool.setSelectionRectangle)
 
         self.crop_widget.show()
 
@@ -1409,8 +1442,7 @@ class TagLab(QMainWindow):
     @pyqtSlot()
     def exportGenetSVG(self):
         filters = "SVG (*.svg)"
-        filename, _ = QFileDialog.getSaveFileName(self, "Save genet shapes in SVG",
-                                                  self.taglab_dir, filters)
+        filename, _ = QFileDialog.getSaveFileName(self, "Save genet shapes in SVG", self.taglab_dir, filters)
         if not filename:
             return
 
@@ -1425,8 +1457,7 @@ class TagLab(QMainWindow):
     @pyqtSlot()
     def exportGenetCSV(self):
         filters = "CSV (*.csv)"
-        filename, _ = QFileDialog.getSaveFileName(self, "Save genet data in CSV", self.taglab_dir,
-                                                  filters)
+        filename, _ = QFileDialog.getSaveFileName(self, "Save genet data in CSV", self.taglab_dir, filters)
         if not filename:
             return
 
@@ -1447,8 +1478,7 @@ class TagLab(QMainWindow):
         if self.split_screen_flag is False:
             msgBox = QMessageBox()
             msgBox.setWindowTitle(self.TAGLAB_VERSION)
-            msgBox.setText(
-                "Please, enable Split Screen and select the source and the target image (!)")
+            msgBox.setText("Please, enable Split Screen and select the source and the target image (!)")
             msgBox.exec()
             return
 
@@ -1458,8 +1488,7 @@ class TagLab(QMainWindow):
         if img_source_index == img_target_index:
             return
 
-        key = self.project.images[img_source_index].id + "-" + self.project.images[
-            img_target_index].id
+        key = self.project.images[img_source_index].id + "-" + self.project.images[img_target_index].id
         corr = self.project.correspondences.get(key)
 
         if corr is not None and corr.data.empty is False:
@@ -1477,8 +1506,7 @@ class TagLab(QMainWindow):
     def exportMatches(self):
 
         filters = "CSV (*.csv)"
-        filename, _ = QFileDialog.getSaveFileName(self, "Save the current matches",
-                                                  self.taglab_dir, filters)
+        filename, _ = QFileDialog.getSaveFileName(self, "Save the current matches", self.taglab_dir, filters)
 
         if filename:
             if self.project.correspondences is not None:
@@ -1623,6 +1651,10 @@ class TagLab(QMainWindow):
         elif event.key() == Qt.Key_Delete:
             self.deleteSelectedBlobs()
 
+        elif event.key() == Qt.Key_X:
+
+            pass
+
         elif event.key() == Qt.Key_B:
             self.attachBoundaries()
 
@@ -1663,6 +1695,7 @@ class TagLab(QMainWindow):
                 pos = self.cursor().pos()
                 self.activeviewer.updateCellState(pos.x(), pos.y(), None)
 
+        # Additional Features
         elif event.key() == Qt.Key_Z:
             # ACTIVATE "FIND CLOSEST IMAGE" TOOL
             if self.iViewWidget is None:
@@ -1684,7 +1717,7 @@ class TagLab(QMainWindow):
 
         elif event.key() == Qt.Key_2:
             # ACTIVATE "4-CLICK" TOOL
-            self.deepExtreme()
+            self.fourClicks()
 
         elif event.key() == Qt.Key_3:
             # ACTIVATE "POSITIVE/NEGATIVE CLICK" TOOL
@@ -1718,10 +1751,12 @@ class TagLab(QMainWindow):
             # FULLY AUTOMATIC SEGMENTATION
             self.selectClassifier()
 
+        # Additional Features
         elif event.key() == Qt.Key_X:
             # ACTIVATE "SAM Predictor" TOOL
             self.samPredictor()
 
+        # Additional Features
         elif event.key() == Qt.Key_Y:
             # ACTIVATE "SAM Generator" TOOL
             self.samGenerator()
@@ -1954,30 +1989,41 @@ class TagLab(QMainWindow):
                 self.showCluster(sel2[0].id, is_source=False, center=False)
 
     @pyqtSlot()
-    def showBlobOnViewer(self):
+    def showOnViewer(self):
 
         self.viewerplus.resetSelection()
 
         selected = self.data_panel.data_table.selectionModel().selectedRows()
         # convert proxyf sortfilter indexes to modelindexes which are the same of the .data_table
-        indexes = [self.data_panel.sortfilter.mapToSource(
-            self.data_panel.sortfilter.index(index.row(), 0)) for index in selected]
+        indexes = [self.data_panel.sortfilter.mapToSource(self.data_panel.sortfilter.index(index.row(), 0)) for index in
+                   selected]
 
         for index in indexes:
             row = self.data_panel.data.iloc[index.row()]
-            blob_id = row['Id']
-            if blob_id < 0:
+            id = row['Id']
+            type = row['Type']
+            if id < 0:
                 print("OOOPS!")
                 continue
 
-            blob = self.viewerplus.annotations.blobById(blob_id)
-            self.viewerplus.addToSelectedList(blob)
+            if type == "R":
 
-            # scale = self.viewerplus.px_to_mm
-            box = blob.bbox
-            x = box[1] + box[2] / 2
-            y = box[0] + box[3] / 2
-            self.viewerplus.centerOn(x, y)
+                blob = self.viewerplus.annotations.blobById(id)
+                self.viewerplus.addToSelectedList(blob)
+
+                box = blob.bbox
+                x = box[1] + box[2] / 2
+                y = box[0] + box[3] / 2
+                self.viewerplus.centerOn(x, y)
+
+            else:
+
+                point = self.viewerplus.annotations.pointById(id)
+                self.viewerplus.addToSelectedPointList(point)
+
+                x = point.coordx
+                y = point.coordy
+                self.viewerplus.centerOn(x, y)
 
     @pyqtSlot()
     def showBlobOnTable(self):
@@ -1989,9 +2035,29 @@ class TagLab(QMainWindow):
 
         rows = []
         for blob in selected:
-            row = self.data_panel.data.index[self.data_panel.data["Id"] == blob.id].to_list()
-            if row is not None:
-                rows += row
+            selected_row = self.data_panel.data.index[(self.data_panel.data["Id"] == blob.id)].to_list()
+            if selected_row is not None:
+                rows += selected_row
+
+        self.data_panel.blockSignals(True)
+        self.data_panel.selectRows(rows)
+        self.data_panel.blockSignals(False)
+
+    @pyqtSlot()
+    def showPointOnTable(self):
+
+        if self.activeviewer is None:
+            return
+
+        selected = self.activeviewer.selected_annpoints
+
+        rows = []
+        for point in selected:
+            selected_row = self.data_panel.data.index[
+                (self.data_panel.data["Id"] == point.id) & (self.data_panel.data["Type"] == 'P')].to_list()
+            if selected_row is not None:
+                rows += selected_row
+
         self.data_panel.blockSignals(True)
         self.data_panel.selectRows(rows)
         self.data_panel.blockSignals(False)
@@ -2118,8 +2184,7 @@ class TagLab(QMainWindow):
 
             img_source_index = self.comboboxSourceImage.currentIndex()
             img_target_index = self.comboboxTargetImage.currentIndex()
-            correspondences = self.project.getImagePairCorrespondences(img_source_index,
-                                                                       img_target_index)
+            correspondences = self.project.getImagePairCorrespondences(img_source_index, img_target_index)
             data = correspondences.data
             selection = data.loc[data["Action"] == type]
             sourceblobs = selection['Blob1'].tolist()
@@ -2140,8 +2205,7 @@ class TagLab(QMainWindow):
         if self.activeviewer.tools.tool == "MATCH":
             img_source_index = self.comboboxSourceImage.currentIndex()
             img_target_index = self.comboboxTargetImage.currentIndex()
-            correspondences = self.project.getImagePairCorrespondences(img_source_index,
-                                                                       img_target_index)
+            correspondences = self.project.getImagePairCorrespondences(img_source_index, img_target_index)
 
             if type == "surface area":
                 correspondences.updateAreas(use_surface_area=True)
@@ -2314,12 +2378,6 @@ class TagLab(QMainWindow):
         zoom = "{:6.0f}%".format(zf)
         self.labelZoomInfo.setText(zoom)
 
-        width = "{:5d}".format(int(round(right - left)))
-        height = "{:5d}".format(int(round(bottom - top)))
-
-        self.labelViewWidthInfo.setText(width)
-        self.labelViewHeightInfo.setText(height)
-
         self.map_top = top
         self.map_left = left
         self.map_bottom = bottom
@@ -2352,7 +2410,7 @@ class TagLab(QMainWindow):
         self.viewerplus.hideScalebar()
 
         # RE-INITIALIZATION
-        self.imageWidget = None
+
         self.mapWidget = None
         self.working_area_widget = None
         self.classifierWidget = None
@@ -2364,11 +2422,10 @@ class TagLab(QMainWindow):
         self.network_name = None
         self.dataset_train_info = None
         self.project = Project()
-        self.project.loadDictionary(os.path.join(self.taglab_dir, self.default_dictionary))
+        self.project.loadDictionary(self.default_dictionary)
         self.last_image_loaded = None
         self.activeviewer = None
         self.contextMenuPosition = None
-        self.iViewWidget = None
         self.data_panel.clear()
         self.compare_panel.clear()
         self.comboboxSourceImage.clear()
@@ -2377,9 +2434,13 @@ class TagLab(QMainWindow):
         self.disableSplitScreen()
         self.layers_widget.setProject(self.project)
 
+        # Additional Features
+        self.iViewWidget = None
+
     def resetToolbar(self):
 
         self.btnMove.setChecked(False)
+        self.btnPoint.setChecked(False)
         self.btnAssign.setChecked(False)
         self.btnEditBorder.setChecked(False)
         self.btnCut.setChecked(False)
@@ -2388,22 +2449,34 @@ class TagLab(QMainWindow):
         self.btnBricksSegmentation.setChecked(False)
         self.btnRuler.setChecked(False)
         self.btnCreateCrack.setChecked(False)
-        self.btnDeepExtreme.setChecked(False)
+        self.btnFourClicks.setChecked(False)
         self.btnRitm.setChecked(False)
+        # self.btnSam.setChecked(False)
+        # self.btnSamInteractive.setChecked(False)
         self.btnCreateGrid.setChecked(False)
         self.btnGrid.setChecked(False)
         self.btnMatch.setChecked(False)
         self.btnAutoClassification.setChecked(False)
+
+        # Additional Features
         self.btnSAMPredictor.setChecked(False)
         self.btnSAMGenerator.setChecked(False)
+
+        # iView isn't included here, as we want it open
+        # even when a new tool is opened.
 
         if self.scale_widget is not None:
             self.scale_widget.close()
             self.scale_widget = None
 
+    @pyqtSlot()
+    def resetSam(self):
+        self.setTool("MOVE")
+
     def setTool(self, tool):
         tools = {
             "MOVE": ["Pan", self.btnMove],
+            "PLACEANNPOINT": ["Place Annotation Point", self.btnPoint],
             "CREATECRACK": ["Crack", self.btnCreateCrack],
             "ASSIGN": ["Assign", self.btnAssign],
             "EDITBORDER": ["Edit Border", self.btnEditBorder],
@@ -2412,9 +2485,13 @@ class TagLab(QMainWindow):
             "WATERSHED": ["Watershed", self.btnWatershed],
             "BRICKS": ["Bricks", self.btnBricksSegmentation],
             "RULER": ["Ruler", self.btnRuler],
-            "DEEPEXTREME": ["4-click", self.btnDeepExtreme],
+            "FOURCLICKS": ["4-click", self.btnFourClicks],
             "MATCH": ["Match", self.btnMatch],
+            # "SAM": ["Sam", self.btnSam],
+            # "SAMINTERACTIVE": ["Saminteractive", self.btnSamInteractive],
             "RITM": ["Ritm", self.btnRitm],
+
+            # Additional Features
             "SAMPREDICTOR": ["SAM Predictor", self.btnSAMPredictor],
             "SAMGENERATOR": ["SAM Generator", self.btnSAMGenerator]
         }
@@ -2504,7 +2581,8 @@ class TagLab(QMainWindow):
     @pyqtSlot()
     def ruler(self):
         """
-        Activate the "ruler" tool. The tool allows to measure the distance between two points or between two blob centroids.
+        Activate the "ruler" tool. The tool allows to measure the distance
+        between two points or between two blob centroids.
         """
         self.setTool("RULER")
         if self.scale_widget is None:
@@ -2512,8 +2590,7 @@ class TagLab(QMainWindow):
             self.scale_widget.setWindowModality(Qt.NonModal)
             self.scale_widget.setScale(self.activeviewer.image.pixelSize())
             self.scale_widget.show()
-            self.activeviewer.tools.tools["RULER"].measuretaken[float].connect(
-                self.scale_widget.setMeasure)
+            self.activeviewer.tools.tools["RULER"].measuretaken[float].connect(self.scale_widget.setMeasure)
             self.scale_widget.newscale[float].connect(self.updateMapScale)
             self.scale_widget.btnOk.clicked.connect(self.closeScaleWidget)
             self.scale_widget.closewidget.connect(self.closeScaleWidget)
@@ -2525,13 +2602,43 @@ class TagLab(QMainWindow):
         self.setTool("MOVE")
 
     @pyqtSlot()
-    def deepExtreme(self):
+    def fourClicks(self):
         """
         Activate the "Deep Extreme" tool. The segmentation is performed by selecting four points at the
         extreme of the corals and confirm the points by pressing SPACE.
         """
-        self.setTool("DEEPEXTREME")
+        self.setTool("FOURCLICKS")
 
+    @pyqtSlot()
+    def placeAnnPoint(self):
+        """
+        Activate the "Deep Extreme" tool.
+        """
+        self.setTool("PLACEANNPOINT")
+
+    @pyqtSlot()
+    def sam(self):
+        """
+        Activate the "Segmeent Everything" tool.
+        """
+        self.setTool("SAM")
+
+    @pyqtSlot()
+    def saminteractive(self):
+        """
+        Activate the "Segmeent Everything" tool.
+        """
+        self.setTool("SAMINTERACTIVE")
+
+    @pyqtSlot()
+    def ritm(self):
+        """
+        Activate the "Interactive click-based segmentation" tool.
+        The segmentation is performed by adding positive or negative clicks.
+        """
+        self.setTool("RITM")
+
+    # Additional Features
     @pyqtSlot()
     def samPredictor(self):
         """
@@ -2542,6 +2649,7 @@ class TagLab(QMainWindow):
         """
         self.setTool("SAMPREDICTOR")
 
+    # Additional Features
     @pyqtSlot()
     def samGenerator(self):
         """
@@ -2550,14 +2658,6 @@ class TagLab(QMainWindow):
         Clicking a third time will reset the defined work area, setting a new top-left coordinate.
         """
         self.setTool("SAMGENERATOR")
-
-    @pyqtSlot()
-    def ritm(self):
-        """
-        Activate the "Interactive click-based segmentation" tool.
-        The segmentation is performed by adding positive or negative clicks.
-        """
-        self.setTool("RITM")
 
     @pyqtSlot()
     def matchTool(self):
@@ -2574,8 +2674,7 @@ class TagLab(QMainWindow):
         if self.split_screen_flag is False:
             msgBox = QMessageBox()
             msgBox.setWindowTitle(self.TAGLAB_VERSION)
-            msgBox.setText(
-                "Please, enable Split Screen and select the source and the target image (!)")
+            msgBox.setText("Please, enable Split Screen and select the source and the target image (!)")
             msgBox.exec()
             self.move()
             return
@@ -2598,37 +2697,45 @@ class TagLab(QMainWindow):
     #
     @pyqtSlot()
     def updatePanelInfoSelected(self):
+
         selected = self.data_panel.data_table.selectionModel().selectedRows()
-        indexes = [self.data_panel.sortfilter.mapToSource(
-            self.data_panel.sortfilter.index(index.row(), 0)) for index in selected]
+        indexes = [self.data_panel.sortfilter.mapToSource(self.data_panel.sortfilter.index(index.row(), 0)) for index in
+                   selected]
         if len(indexes) == 0:
             self.resetPanelInfo()
             return
+
         index = indexes[0]
         row = self.data_panel.data.iloc[index.row()]
-        blob_id = row['Id']
-        if blob_id < 0:
+        id = row['Id']
+        type = row['Type']
+        if id < 0:
             print("OOOPS!")
             return
 
-        blob = self.viewerplus.annotations.blobById(blob_id)
-        self.updatePanelInfo(blob)
+        if type == 'R':
+            blob = self.viewerplus.annotations.blobById(id)
+            self.updatePanelInfo(blob)
+        else:
+            point = self.viewerplus.annotations.pointById(id)
+            self.updatePanelInfo(point)
 
-    @pyqtSlot(Blob)
-    def updatePanelInfo(self, blob):
+    @pyqtSlot(object)
+    def updatePanelInfo(self, blob_or_point):
         scale_factor = self.activeviewer.image.pixelSize()
-        self.groupbox_blobpanel.update(blob, scale_factor)
+        self.groupbox_blobpanel.update(blob_or_point, scale_factor)
+        self.blob_with_info_displayed = blob_or_point
 
     @pyqtSlot()
     def resetPanelInfo(self):
         self.groupbox_blobpanel.clear()
+        self.blob_with_info_displayed = None
 
     def deleteSelectedBlobs(self):
         if self.viewerplus.tools.tool == 'MATCH':
             self.deleteMatch()
         # disable delete blobs while creating new ones
-        elif self.viewerplus.tools.tool == 'RITM' and \
-                self.viewerplus.tools.tools['RITM'].work_area_bbox[2] > 0:
+        elif self.viewerplus.tools.tool == 'RITM' and self.viewerplus.tools.tools['RITM'].work_area_bbox[2] > 0:
             return False
         else:
             self.activeviewer.tools.edit_points.reset()
@@ -2643,6 +2750,9 @@ class TagLab(QMainWindow):
             return
         for blob in view.selected_blobs:
             view.setBlobClass(blob, self.labels_widget.getActiveLabelName())
+        for annpoint in view.selected_annpoints:
+            view.setAnnPointClass(annpoint, self.labels_widget.getActiveLabelName())
+
         view.saveUndo()
         view.resetSelection()
 
@@ -2680,8 +2790,7 @@ class TagLab(QMainWindow):
         else:
             msgBox = QMessageBox()
             msgBox.setWindowTitle(self.TAGLAB_VERSION)
-            msgBox.setText(
-                "You need to select at least <em>two</em> blobs for MERGE OVERLAPPED LABELS operation.")
+            msgBox.setText("You need to select at least <em>two</em> blobs for MERGE OVERLAPPED LABELS operation.")
             msgBox.exec()
 
     def subtract(self):
@@ -2928,6 +3037,16 @@ class TagLab(QMainWindow):
 
         logfile.info("[OP-REFINE-BORDER-ERODE] ERODE-BORDER operation ends.")
 
+    def refineBorderAll(self):
+
+        if self.activeviewer is not None:
+            if self.activeviewer.image is not None:
+                self.activeviewer.resetSelection()
+
+                if len(self.activeviewer.image.annotations.seg_blobs) > 0:
+                    self.activeviewer.selectAllBlobs()
+                    self.refineBorder()
+
     def refineBorderOperation(self):
 
         view = self.activeviewer
@@ -2949,7 +3068,7 @@ class TagLab(QMainWindow):
 
     def refineBorder(self):
         """
-        Refine blob border
+        Refine blob border - all the selected blobs are refined
         """
 
         view = self.activeviewer
@@ -2958,23 +3077,22 @@ class TagLab(QMainWindow):
 
         # padding mask to allow moving boundary
         padding = 35
-        if len(view.selected_blobs) == 1:
 
-            selected = view.selected_blobs[0]
+        blobs = view.selected_blobs.copy()
+
+        counter = 0
+        for blob in blobs:
 
             if view.refine_original_mask is None:
                 view.refine_grow = 0
-            # blob = selected.copy()
-            self.logBlobInfo(selected, "[OP-REFINE-BORDER][BLOB-SELECTED]")
 
             if view.refine_grow == 0:
-                mask = selected.getMask()
-                mask = np.pad(mask, (padding, padding), mode='constant',
-                              constant_values=(0, 0)).astype(np.ubyte)
-                view.refine_original_blob = selected
+                mask = blob.getMask()
+                mask = np.pad(mask, (padding, padding), mode='constant', constant_values=(0, 0)).astype(np.ubyte)
+                view.refine_original_blob = blob
                 view.refine_original_mask = mask.copy()
-                view.refine_original_bbox = selected.bbox.copy()
-                bbox = selected.bbox.copy()
+                view.refine_original_bbox = blob.bbox.copy()
+                bbox = blob.bbox.copy()
             else:
                 mask = view.refine_original_mask.copy()
                 bbox = view.refine_original_bbox.copy()
@@ -2984,17 +3102,17 @@ class TagLab(QMainWindow):
             bbox[2] += 2 * padding  # width
             bbox[3] += 2 * padding  # height
 
-            img = utils.cropQImage(view.img_map, bbox)
-            img = utils.qimageToNumpyArray(img)
+            img = genutils.cropQImage(view.img_map, bbox)
+            img = genutils.qimageToNumpyArray(img)
 
             # USE DEPTH INFORMATION IF AVAILABLE
             # if view.depth_map is not None:
             #     depth = view.depth_map[bbox[0] : bbox[0]+bbox[3], bbox[1] : bbox[1] + bbox[2]]
-            #     imgg = utils.floatmapToQImage((depth - 4)*255)
+            #     imgg = genutils.floatmapToQImage((depth - 4)*255)
             #     imgg.save("test.png")
             #
-            #     utils.cropQImage(self.depth_map, bbox)
-            #     depth = utils.qimageToNumpyArray(depth)
+            #     genutils.cropQImage(self.depth_map, bbox)
+            #     depth = genutils.qimageToNumpyArray(depth)
             # else:
             #     depth = None
 
@@ -3002,7 +3120,7 @@ class TagLab(QMainWindow):
 
             # try:
             #    from coraline.Coraline import segment
-            #    segment(utils.qimageToNumpyArray(img), mask, 0.0, conservative=0.07, grow=self.refine_grow, radius=30)
+            #    segment(genutils.qimageToNumpyArray(img), mask, 0.0, conservative=0.07, grow=self.refine_grow, radius=30)
 
             # except Exception as e:
             #    msgBox = QMessageBox()
@@ -3014,37 +3132,31 @@ class TagLab(QMainWindow):
                 view.tools.edit_points.last_editborder_points = None
 
             try:
-                if view.tools.edit_points.last_blob != selected:
+                if view.tools.edit_points.last_blob != blob:
                     view.tools.edit_points.last_editborder_points = None
-                created_blobs = view.annotations.refineBorder(bbox, selected, img, depth, mask,
-                                                              view.refine_grow,
+
+                created_blobs = view.annotations.refineBorder(bbox, blob, img, depth, mask, view.refine_grow,
                                                               view.tools.edit_points.last_editborder_points)
 
                 if len(created_blobs) == 0:
                     pass
-                if len(created_blobs) == 1:
-                    view.updateBlob(selected, created_blobs[0], True)
-                    self.logBlobInfo(created_blobs[0], "[OP-REFINE-BORDER][BLOB-CREATED]")
-                    self.logBlobInfo(created_blobs[0], "[OP-REFINE-BORDER][BLOB-REFINED]")
+                elif len(created_blobs) == 1:
+                    view.updateBlob(blob, created_blobs[0], True, redraw=False)
                 else:
-                    view.removeBlob(selected)
+                    view.removeBlob(blob, redraw=False)
                     for blob in created_blobs:
-                        view.addBlob(blob, selected=True)
-                        # NOTE: they are not CREATED! they are refined! Leaving it here because some logging software might depend on it.
-                        self.logBlobInfo(blob, "[OP-REFINE-BORDER][BLOB-CREATED]")
-                        self.logBlobInfo(blob, "[OP-REFINE-BORDER][BLOB-REFINED]")
+                        view.addBlob(blob, selected=True, redraw=False)
 
                 view.saveUndo()
+
+                counter += 1
+                print(counter, "of", len(blobs), "refined")
 
             except Exception as e:
                 print("FAILED!", e)
                 pass
 
-        else:
-            msgBox = QMessageBox()
-            msgBox.setWindowTitle(self.TAGLAB_VERSION)
-            msgBox.setText("You need to select <em>one</em> region for REFINE operation.")
-            msgBox.exec()
+        view.scene.invalidate()
 
     def fillLabel(self):
 
@@ -3078,12 +3190,9 @@ class TagLab(QMainWindow):
 
     def logBlobInfo(self, blob, tag):
 
-        message1 = tag + " BLOBID=" + str(blob.id) + " VERSION=" + str(
-            blob.version) + " CLASS=" + blob.class_name
-        message2 = tag + " top={:.1f} left={:.1f} width={:.1f} height={:.1f}".format(blob.bbox[0],
-                                                                                     blob.bbox[1],
-                                                                                     blob.bbox[2],
-                                                                                     blob.bbox[3])
+        message1 = tag + " BLOBID=" + str(blob.id) + " VERSION=" + str(blob.version) + " CLASS=" + blob.class_name
+        message2 = tag + " top={:.1f} left={:.1f} width={:.1f} height={:.1f}".format(blob.bbox[0], blob.bbox[1],
+                                                                                     blob.bbox[2], blob.bbox[3])
         message3 = tag + " cx={:.1f} cy={:.1f}".format(blob.centroid[0], blob.centroid[1])
         message4 = tag + " A={:.1f} P={:.1f} ".format(blob.area, blob.perimeter)
 
@@ -3092,7 +3201,8 @@ class TagLab(QMainWindow):
         logfile.info(message3)
         logfile.info(message4)
 
-    # REFACTOR call create a new project and replace the old one.
+    # REFACTOR call create a new project and treplace the old one.
+
     @pyqtSlot()
     def newProject(self):
 
@@ -3115,6 +3225,87 @@ class TagLab(QMainWindow):
         self.setProjectTitle("NONE")
         logfile.info("[PROJECT] A new project has been setup.")
         self.groupbox_blobpanel.region_attributes = self.project.region_attributes
+
+    @pyqtSlot()
+    def chooseSampling(self):
+        """
+        Opens the QtSampleWidget, letting users choose their parameters.
+        """
+        if self.activeviewer is not None:
+            if self.activeviewer.image is not None:
+                if self.samplePointWidget is None:
+                    self.disableSplitScreen()
+                    self.samplePointWidget = QtSampleWidget(parent=self)
+                    self.samplePointWidget.setWindowModality(Qt.NonModal)
+                    self.samplePointWidget.show()
+                    self.samplePointWidget.validchoices.connect(self.samplePointAnn)
+                else:
+                    self.closeSamplingWidget()
+                    self.chooseSampling()
+
+    @pyqtSlot()
+    def closeSamplingWidget(self):
+        """
+        Closes QtSamplerWidget.
+        """
+        self.setTool("MOVE")
+        self.samplePointWidget.close()
+        del self.samplePointWidget
+        self.samplePointWidget = None
+
+    @pyqtSlot()
+    def samplePointAnn(self):
+        """
+        Gets the parameters from the QtSamplerWidget, calls the Sampler class functions,
+        creates points, displays to users as unlabeled points.
+        """
+        # After the SampleWidget is run, values are passed back
+        choosed_method = self.samplePointWidget.comboMethod.currentText()
+        choosed_point_number = self.samplePointWidget.choosednumber
+        offset = self.samplePointWidget.offset
+
+        # Gets the global working area
+        work_area = self.project.working_area
+
+        # Check the working area, if none, apply to whole ortho
+        if work_area is not None:
+            sample_area = work_area
+        else:
+            sample_area = [0, 0, self.activeviewer.image.width, self.activeviewer.image.height]
+
+        # Get the current map
+        image = self.activeviewer.image
+
+        # Create sampler object, do the actual sampling
+        sampler = Sampler(image, sample_area, choosed_method, choosed_point_number, offset)
+        points = sampler.generate()
+
+        # Show progress bar
+        progress_bar = QtProgressBarCustom()
+        progress_bar.setWindowFlags(Qt.ToolTip | Qt.CustomizeWindowHint)
+        progress_bar.setWindowModality(Qt.NonModal)
+        progress_bar.show()
+
+        progress_bar.setMessage("Sampling Points...")
+
+        # Loop through each point and add to scene
+        for p_idx, point in enumerate(points):
+            id = self.activeviewer.annotations.getFreePointId()
+            new_point = Point(int(point[0]), int(point[1]), 'Empty', id)
+            self.activeviewer.image.annotations.addPoint(new_point)
+
+            # Update progress bar
+            if p_idx % 10 == 0:
+                progress_bar.setProgress(float(p_idx / len(points) * 100.0))
+                QApplication.processEvents()
+
+        # Close progress bar
+        progress_bar.close()
+        del progress_bar
+        progress_bar = None
+
+        self.closeSamplingWidget()
+        self.activeviewer.drawAllPointsAnn()
 
     @pyqtSlot()
     def editProject(self):
@@ -3182,8 +3373,7 @@ class TagLab(QMainWindow):
             return
 
         if self.alignToolWidget is None:
-            self.alignToolWidget = QtAlignmentToolWidget(self.taglab_dir, self.project,
-                                                         parent=self)
+            self.alignToolWidget = QtAlignmentToolWidget(self.project, parent=self)
             self.alignToolWidget.setWindowModality(Qt.WindowModal)
             self.alignToolWidget.closed.connect(self.closeAlignmentTool)
             self.alignToolWidget.showMaximized()
@@ -3194,8 +3384,7 @@ class TagLab(QMainWindow):
         if self.dictionary_widget is None:
             self.dictionary_widget = QtDictionaryWidget(self.taglab_dir, self.project, parent=self)
             self.dictionary_widget.addlabel.connect(self.addLabelDictionary)
-            self.dictionary_widget.updatelabel[str, list, str, list].connect(
-                self.updateLabelDictionary)
+            self.dictionary_widget.updatelabel[str, list, str, list].connect(self.updateLabelDictionary)
             self.dictionary_widget.deletelabel[str].connect(self.deleteLabelfromDictionary)
             self.dictionary_widget.closewidget.connect(self.closeDictionaryWidget)
             self.dictionary_widget.show()
@@ -3210,8 +3399,7 @@ class TagLab(QMainWindow):
     @pyqtSlot()
     def editRegionAttributes(self):
 
-        self.regionAttributes_dialog = QtRegionAttributesWidget(self.taglab_dir, self.project,
-                                                                parent=self)
+        self.regionAttributes_dialog = QtRegionAttributesWidget(self.taglab_dir, self.project, parent=self)
         self.regionAttributes_dialog.show()
         self.regionAttributes_dialog.closed.connect(self.updateRegionAttributes)
 
@@ -3361,7 +3549,7 @@ class TagLab(QMainWindow):
             image.annotations.blobAdded.connect(self.updatePanelInfo)
             image.annotations.blobRemoved.connect(self.resetPanelInfo)
 
-    #REFACTOR
+    # REFACTOR
     @pyqtSlot()
     def setMapProperties(self):
 
@@ -3370,9 +3558,9 @@ class TagLab(QMainWindow):
         try:
 
             image = Image(
-                map_px_to_mm_factor = self.mapWidget.data["px_to_mm"],
-                id = self.mapWidget.data['name'],
-                name = self.mapWidget.data['name'],
+                map_px_to_mm_factor=self.mapWidget.data["px_to_mm"],
+                id=self.mapWidget.data['name'],
+                name=self.mapWidget.data['name'],
                 acquisition_date=self.mapWidget.data['acquisition_date']
             )
 
@@ -3404,6 +3592,7 @@ class TagLab(QMainWindow):
     def updateToolStatus(self):
 
         for button in [self.btnMove,
+                       self.btnPoint,
                        self.btnAssign,
                        self.btnEditBorder,
                        self.btnCut,
@@ -3412,11 +3601,14 @@ class TagLab(QMainWindow):
                        self.btnWatershed,
                        self.btnBricksSegmentation,
                        self.btnRuler,
-                       self.btnDeepExtreme,
+                       self.btnFourClicks,
                        self.btnRitm,
+                       # self.btnSam,
+                       # self.btnSamInteractive,
                        self.btnAutoClassification,
                        self.btnCreateGrid,
                        self.btnGrid,
+                       # Additional Features
                        self.btnSAMPredictor,
                        self.btnSAMGenerator]:
             button.setEnabled(len(self.project.images) > 0)
@@ -3507,13 +3699,23 @@ class TagLab(QMainWindow):
             self.viewerplus2.viewChanged()
 
         if flag_pixel_size_changed:
+
+            # update area information in the data panel
+            image.annotations.table_needs_update = True
+            self.data_panel.updateTable(image.create_data_table())
+
+            # update area information in the comparison panel
             area_mode = self.compare_panel.getAreaMode()
+
             if area_mode == "surface area":
                 self.project.updatePixelSizeInCorrespondences(image, True)
             else:
                 self.project.updatePixelSizeInCorrespondences(image, False)
 
             self.compare_panel.updateData()
+
+            # update panel info
+            self.updatePanelInfo(self.blob_with_info_displayed)
 
         # update the comboboxes to select the images
         self.updateImageSelectionMenu()
@@ -3567,13 +3769,14 @@ class TagLab(QMainWindow):
             layer.disable()
             self.viewerplus.undrawLayer(layer)
 
-    @pyqtSlot(Image, bool)
-    def toggleAnnotations(self, image, enable):
+    @pyqtSlot(str, Image, bool)
+    def toggleAnnotations(self, annotation_type, image, enable):
+
         if self.viewerplus.image == image:
-            self.viewerplus.toggleAnnotations(enable)
+            self.viewerplus.toggleAnnotations(annotation_type, enable)
 
         if self.viewerplus2.image == image:
-            self.viewerplus2.toggleAnnotations(enable)
+            self.viewerplus2.toggleAnnotations(annotation_type, enable)
 
     @pyqtSlot()
     def openProject(self):
@@ -3647,17 +3850,21 @@ class TagLab(QMainWindow):
 
                     self.disableSplitScreen()
 
-                    self.working_area_widget = QtWorkingAreaWidget(self)
-                    self.working_area_widget.btnChooseArea.clicked.connect(
-                        self.enableAreaSelection)
+                    # Add scaling from active image for conversions
+                    if self.activeviewer.image.map_px_to_mm_factor:
+                        scale = float(self.activeviewer.image.map_px_to_mm_factor)
+                    else:
+                        scale = None
+
+                    self.working_area_widget = QtWorkingAreaWidget(self, scale=scale)
+                    self.working_area_widget.btnChooseArea.clicked.connect(self.enableAreaSelection)
                     self.working_area_widget.closed.connect(self.disableAreaSelection)
                     self.working_area_widget.closed.connect(self.deleteWorkingAreaWidget)
                     self.working_area_widget.btnDelete.clicked.connect(self.deleteWorkingArea)
                     self.working_area_widget.btnApply.clicked.connect(self.setWorkingArea)
                     selection_tool = self.activeviewer.tools.tools["SELECTAREA"]
                     selection_tool.setAreaStyle("WORKING")
-                    selection_tool.rectChanged[int, int, int, int].connect(
-                        self.working_area_widget.updateArea)
+                    selection_tool.rectChanged[int, int, int, int].connect(self.working_area_widget.updateArea)
                     self.working_area_widget.areaChanged[int, int, int, int].connect(
                         selection_tool.setSelectionRectangle)
 
@@ -3698,8 +3905,7 @@ class TagLab(QMainWindow):
     @pyqtSlot()
     def deleteWorkingArea(self):
         box = QMessageBox()
-        reply = box.question(self.working_area_widget, self.TAGLAB_VERSION,
-                             "Are you sure to delete the Working Area?",
+        reply = box.question(self.working_area_widget, self.TAGLAB_VERSION, "Are you sure to delete the Working Area?",
                              QMessageBox.Yes | QMessageBox.No)
         if reply == QMessageBox.Yes:
             self.activeviewer.undrawWorkingArea()
@@ -3775,8 +3981,7 @@ class TagLab(QMainWindow):
         widget.setStyleSheet("background-color: rgba(40,40,40,100); color: white")
         widget.setLayout(layout)
         widget.setWindowTitle("Report Issues")
-        widget.setWindowFlags(
-            Qt.Window | Qt.CustomizeWindowHint | Qt.WindowCloseButtonHint | Qt.WindowTitleHint)
+        widget.setWindowFlags(Qt.Window | Qt.CustomizeWindowHint | Qt.WindowCloseButtonHint | Qt.WindowTitleHint)
         widget.show()
 
     @pyqtSlot()
@@ -3785,7 +3990,7 @@ class TagLab(QMainWindow):
         icon = QLabel()
 
         # BIG taglab icon
-        pxmap = QPixmap(os.path.join(os.path.join(self.taglab_dir, "icons"), "taglab240px.png"))
+        pxmap = QPixmap(os.path.join("icons", "taglab240px.png"))
         pxmap = pxmap.scaledToWidth(160)
         icon.setPixmap(pxmap)
         icon.setStyleSheet("QLabel {padding: 5px; }");
@@ -3815,8 +4020,7 @@ class TagLab(QMainWindow):
         widget.setStyleSheet("background-color: rgba(40,40,40,100); color: white")
         widget.setLayout(layout)
         widget.setWindowTitle("About")
-        widget.setWindowFlags(
-            Qt.Window | Qt.CustomizeWindowHint | Qt.WindowCloseButtonHint | Qt.WindowTitleHint)
+        widget.setWindowFlags(Qt.Window | Qt.CustomizeWindowHint | Qt.WindowCloseButtonHint | Qt.WindowTitleHint)
         widget.show()
 
     @pyqtSlot()
@@ -3836,9 +4040,7 @@ class TagLab(QMainWindow):
             return
 
         QApplication.setOverrideCursor(Qt.WaitCursor)
-        created_blobs = self.activeviewer.annotations.import_label_map(filename,
-                                                                       self.project.labels,
-                                                                       offset=[0, 0],
+        created_blobs = self.activeviewer.annotations.import_label_map(filename, self.project.labels, offset=[0, 0],
                                                                        scale=[1.0, 1.0])
         for blob in created_blobs:
             self.activeviewer.addBlob(blob, selected=False)
@@ -3860,8 +4062,7 @@ class TagLab(QMainWindow):
         if self.activeviewer.image is not None:
             if self.activeviewer.image.georef_filename == "":
                 box = QMessageBox()
-                box.setText(
-                    "Georeferencing is not available; please load a georeferenced ortho image.")
+                box.setText("Georeferencing is not available; please load a georeferenced ortho image.")
                 box.exec()
                 return
         else:
@@ -3871,8 +4072,7 @@ class TagLab(QMainWindow):
             return
 
         filters = "Shapefile (*.shp)"
-        self.shapefile_filename, _ = QFileDialog.getOpenFileName(self, "Import Shapefile", "",
-                                                                 filters)
+        self.shapefile_filename, _ = QFileDialog.getOpenFileName(self, "Import Shapefile", "", filters)
         QApplication.setOverrideCursor(Qt.WaitCursor)
 
         if not self.shapefile_filename:
@@ -3900,7 +4100,7 @@ class TagLab(QMainWindow):
 
             blob_list = rasterops.read_regions_geometry(self.shapefile_filename, gf)
             data = rasterops.read_attributes(self.shapefile_filename)
-            utils.setAttributes(self.project, data, blob_list)
+            genutils.setAttributes(self.project, data, blob_list)
 
             self.groupbox_blobpanel.updateRegionAttributes(self.project.region_attributes)
 
@@ -3921,7 +4121,7 @@ class TagLab(QMainWindow):
             layer.shapes = shape_list
             self.activeviewer.image.layers.append(layer)
 
-            # utils.setAttributes(self.project, data, layer.shapes)
+            # genutils.setAttributes(self.project, data, layer.shapes)
 
             self.activeviewer.drawAllLayers()
 
@@ -3936,7 +4136,7 @@ class TagLab(QMainWindow):
             layer.shapes = shape_list
             self.activeviewer.image.layers.append(layer)
 
-            # utils.setAttributes(self.project, data, layer.shapes)
+            # genutils.setAttributes(self.project, data, layer.shapes)
 
             self.activeviewer.drawAllLayers()
 
@@ -3953,19 +4153,35 @@ class TagLab(QMainWindow):
             box.exec()
             return
 
-        filters = "CSV (*.csv) ;; All Files (*)"
-        filename, _ = QFileDialog.getSaveFileName(self, "Output file",
-                                                  self.activeviewer.image.name + ".csv", filters)
+        self.export_widget = QtExportAnnAsTable()
+        self.export_widget.setWindowModality(Qt.NonModal)
 
+        self.export_widget.show()
+        self.export_widget.mode[str].connect(self.exportTableMode)
+        self.export_widget.btnOk.clicked.connect(self.closeExportWidget)
+        self.export_widget.closewidget.connect(self.closeExportWidget)
+
+    @pyqtSlot(str)
+    def exportTableMode(self, choice):
+
+        filters = "CSV (*.csv) ;; All Files (*)"
+        filename, _ = QFileDialog.getSaveFileName(self, "Output file", self.activeviewer.image.name + ".csv", filters)
+        imagename = os.path.basename(self.activeviewer.channel.filename)
         if filename:
-            self.activeviewer.annotations.export_data_table(self.project, self.activeviewer.image,
-                                                            filename)
+            self.activeviewer.annotations.export_data_table(self.project, self.activeviewer.image, imagename, filename,
+                                                            choice)
 
             msgBox = QMessageBox(self)
             msgBox.setWindowTitle(self.TAGLAB_VERSION)
             msgBox.setText("Data table exported successfully!")
             msgBox.exec()
             return
+
+    @pyqtSlot()
+    def closeExportWidget(self):
+
+        self.export_widget = None
+        self.setTool("MOVE")
 
     @pyqtSlot()
     def exportAnnAsMap(self):
@@ -3987,8 +4203,7 @@ class TagLab(QMainWindow):
                 QApplication.setOverrideCursor(Qt.WaitCursor)
 
                 size = QSize(self.activeviewer.image.width, self.activeviewer.image.height)
-                self.activeviewer.annotations.export_image_data_for_Scripps(size, filename,
-                                                                            self.project)
+                self.activeviewer.annotations.export_image_data_for_Scripps(size, filename, self.project)
 
                 QApplication.restoreOverrideCursor()
 
@@ -4003,13 +4218,17 @@ class TagLab(QMainWindow):
         if self.activeviewer is not None:
             histo_widget = QtHistogramWidget(self.activeviewer.annotations, self.project.labels,
                                              self.activeviewer.image.pixelSize(),
-                                             self.activeviewer.image.acquisition_date,
-                                             self.project.working_area, self)
+                                             self.activeviewer.image.acquisition_date, self.project.working_area, self)
             histo_widget.setWindowModality(Qt.WindowModal)
             histo_widget.show()
 
     @pyqtSlot()
     def exportAnnAsShapefiles(self):
+        """
+        Writes the current orthomosaic's regions to a shape file; modified so that
+        if the orthomosaic is not already georeferenced, the shapefile can still
+        be written, but it'll use default EPSG::3857 (units meters)
+        """
 
         if self.activeviewer is None:
             return
@@ -4017,19 +4236,17 @@ class TagLab(QMainWindow):
         if self.activeviewer.image is not None:
             if self.activeviewer.image.georef_filename == "":
                 box = QMessageBox()
-                box.setText("Georeference information are not available.")
+                box.setText("Warning: Georeference information is not available. "
+                            "Shapefile will be saved in EPSG::3857 coordinate system.")
                 box.exec()
-                return
 
         filters = "SHP (*.shp)"
-        output_filename, _ = QFileDialog.getSaveFileName(self, "Save Shapefile as",
-                                                         self.taglab_dir, filters)
+        output_filename, _ = QFileDialog.getSaveFileName(self, "Save Shapefile as", self.taglab_dir, filters)
 
         if output_filename:
             blobs = self.activeviewer.annotations.seg_blobs
             gf = self.activeviewer.image.georef_filename
-            rasterops.write_shapefile(self.project, self.activeviewer.image, blobs, gf,
-                                      output_filename)
+            rasterops.write_shapefile(self.project, self.activeviewer.image, blobs, gf, output_filename)
 
             msgBox = QMessageBox(self)
             msgBox.setWindowTitle(self.TAGLAB_VERSION)
@@ -4049,11 +4266,12 @@ class TagLab(QMainWindow):
             box.exec()
             return
 
-        if self.activeviewer.image.georef_filename == "":
-            box = QMessageBox()
-            box.setText("Georeference information are not available.")
-            box.exec()
-            return
+        if self.activeviewer.image is not None:
+            if self.activeviewer.image.georef_filename == "":
+                box = QMessageBox()
+                box.setText("Warning: Georeference information is not available. "
+                            "Shapefile will be saved in EPSG::3857 coordinate system.")
+                box.exec()
 
         filters = "Tiff (*.tif *.tiff) ;; All Files (*)"
         output_filename, _ = QFileDialog.getSaveFileName(self, "Output GeoTiff", "", filters)
@@ -4062,14 +4280,11 @@ class TagLab(QMainWindow):
             QApplication.setOverrideCursor(Qt.WaitCursor)
 
             size = QSize(self.activeviewer.image.width, self.activeviewer.image.height)
-            label_map_img = self.activeviewer.annotations.create_label_map(size,
-                                                                           self.project.labels,
-                                                                           None)
-            label_map_np = utils.qimageToNumpyArray(label_map_img)
+            label_map_img = self.activeviewer.annotations.create_label_map(size, self.project.labels, None)
+            label_map_np = genutils.qimageToNumpyArray(label_map_img)
             georef_filename = self.activeviewer.image.georef_filename
             outfilename = os.path.splitext(output_filename)[0]
-            rasterops.saveGeorefLabelMap(label_map_np, georef_filename, self.project.working_area,
-                                         outfilename)
+            rasterops.saveGeorefLabelMap(label_map_np, georef_filename, self.project.working_area, outfilename)
 
             QApplication.restoreOverrideCursor()
 
@@ -4085,21 +4300,19 @@ class TagLab(QMainWindow):
             if self.newDatasetWidget is None:
 
                 if not self.activeviewer.image.export_dataset_area:
-                    self.activeviewer.image.export_dataset_area = [0, 0,
-                                                                   self.activeviewer.img_map.width(),
+                    self.activeviewer.image.export_dataset_area = [0, 0, self.activeviewer.img_map.width(),
                                                                    self.activeviewer.img_map.height()]
 
                 annotations = self.activeviewer.annotations
-                self.newDatasetWidget = QtNewDatasetWidget(
-                    self.activeviewer.image.export_dataset_area, parent=self)
+                self.newDatasetWidget = QtNewDatasetWidget(self.activeviewer.image.export_dataset_area, parent=self)
                 self.newDatasetWidget.setWindowModality(Qt.NonModal)
                 self.newDatasetWidget.btnChooseExportArea.clicked.connect(self.enableAreaSelection)
                 self.newDatasetWidget.btnExport.clicked.connect(self.exportNewDataset)
                 self.newDatasetWidget.btnCancel.clicked.connect(self.disableAreaSelection)
                 self.newDatasetWidget.closed.connect(self.disableAreaSelection)
                 self.activeviewer.tools.tools["SELECTAREA"].setAreaStyle("EXPORT_DATASET")
-                self.activeviewer.tools.tools["SELECTAREA"].rectChanged[
-                    int, int, int, int].connect(self.updateExportDatasetArea)
+                self.activeviewer.tools.tools["SELECTAREA"].rectChanged[int, int, int, int].connect(
+                    self.updateExportDatasetArea)
 
             self.newDatasetWidget.show()
 
@@ -4135,7 +4348,7 @@ class TagLab(QMainWindow):
             current_image = self.project.images[index]
 
             new_dataset = NewDataset(self.activeviewer.img_map, self.project.labels, current_image,
-                                     tile_size=1026, step=513, flag_coco=flag_coco)
+                                     tile_size=1026, step=256, flag_coco=flag_coco)
 
             target_classes = training.createTargetClasses(self.activeviewer.annotations)
 
@@ -4144,8 +4357,7 @@ class TagLab(QMainWindow):
             new_dataset.computeFrequencies(target_classes)
             target_pixel_size = self.newDatasetWidget.getTargetScale()
 
-            check_size = new_dataset.workingAreaCropAndRescale(self.activeviewer.image.pixelSize(),
-                                                               target_pixel_size,
+            check_size = new_dataset.workingAreaCropAndRescale(self.activeviewer.image.pixelSize(), target_pixel_size,
                                                                self.activeviewer.image.export_dataset_area)
 
             if check_size is False:
@@ -4180,13 +4392,11 @@ class TagLab(QMainWindow):
             #     class_to_sample, radii = new_dataset.computeRadii(target_classes)
             #     new_dataset.cut_tiles(regular=False, oversampling=True, classes_to_sample=class_to_sample, radii=radii)
             # else:
-            new_dataset.cut_tiles(regular=True, oversampling=False, classes_to_sample=None,
-                                  radii=None)
+            new_dataset.cut_tiles(regular=True, oversampling=False, classes_to_sample=None, radii=None)
 
             flag_save = self.newDatasetWidget.checkTiles.isChecked()
             if flag_save:
-                new_dataset.save_samples("tiles_cutted.png", show_tiles=True, show_areas=True,
-                                         radii=None)
+                new_dataset.save_samples("tiles_cutted.png", show_tiles=True, show_areas=True, radii=None)
 
             # export the tiles
             self.progress_bar.setMessage("Export tiles (it could take long)..")
@@ -4246,16 +4456,29 @@ class TagLab(QMainWindow):
         images_dir_val = os.path.join(val_folder, "images")
         labels_dir_val = os.path.join(val_folder, "labels")
 
-        dataset_train_info, train_loss_values, val_loss_values = training.trainingNetwork(
-            images_dir_train, labels_dir_train,
-            images_dir_val, labels_dir_val,
-            self.project.labels, target_classes, num_classes,
-            save_network_as=network_filename, classifier_name=classifier_name,
-            epochs=nepochs, batch_sz=batch_size, batch_mult=4, validation_frequency=2,
-            loss_to_use="FOCAL_TVERSKY", epochs_switch=0, epochs_transition=0,
-            learning_rate=lr, L2_penalty=L2, tversky_alpha=0.6, tversky_gamma=0.75,
-            optimiz="ADAM", flag_shuffle=True, flag_training_accuracy=False,
-            progress=self.progress_bar)
+        dataset_train_info, train_loss_values, val_loss_values = training.trainingNetwork(images_dir_train,
+                                                                                          labels_dir_train,
+                                                                                          images_dir_val,
+                                                                                          labels_dir_val,
+                                                                                          self.project.labels,
+                                                                                          target_classes, num_classes,
+                                                                                          save_network_as=network_filename,
+                                                                                          classifier_name=classifier_name,
+                                                                                          epochs=nepochs,
+                                                                                          batch_sz=batch_size,
+                                                                                          batch_mult=4,
+                                                                                          validation_frequency=2,
+                                                                                          loss_to_use="FOCAL_TVERSKY",
+                                                                                          epochs_switch=0,
+                                                                                          epochs_transition=0,
+                                                                                          learning_rate=lr,
+                                                                                          L2_penalty=L2,
+                                                                                          tversky_alpha=0.6,
+                                                                                          tversky_gamma=0.75,
+                                                                                          optimiz="ADAM",
+                                                                                          flag_shuffle=True,
+                                                                                          flag_training_accuracy=False,
+                                                                                          progress=self.progress_bar)
 
         ##### TEST
 
@@ -4273,12 +4496,9 @@ class TagLab(QMainWindow):
         self.progress_bar.setMessage("Test network..")
         QApplication.processEvents()
 
-        metrics = training.testNetwork(images_dir_test, labels_dir_test,
-                                       labels_dictionary=self.project.labels,
-                                       target_classes=dataset_train_info.dict_target,
-                                       dataset_train=dataset_train_info,
-                                       network_filename=network_filename,
-                                       output_folder=output_folder,
+        metrics = training.testNetwork(images_dir_test, labels_dir_test, labels_dictionary=self.project.labels,
+                                       target_classes=dataset_train_info.dict_target, dataset_train=dataset_train_info,
+                                       network_filename=network_filename, output_folder=output_folder,
                                        progress=self.progress_bar)
 
         # info about the classifier created
@@ -4290,10 +4510,8 @@ class TagLab(QMainWindow):
         self.deleteTrainYourNetworkWidget()
 
         self.trainResultsWidget = QtTrainingResultsWidget(dataset_train_info.dict_target,
-                                                          metrics, train_loss_values,
-                                                          val_loss_values,
-                                                          images_dir_test, labels_dir_test,
-                                                          output_folder,
+                                                          metrics, train_loss_values, val_loss_values,
+                                                          images_dir_test, labels_dir_test, output_folder,
                                                           parent=self)
         self.trainResultsWidget.btnConfirm.clicked.connect(self.confirmTraining)
         self.trainResultsWidget.setAttribute(Qt.WA_DeleteOnClose)
@@ -4313,8 +4531,7 @@ class TagLab(QMainWindow):
         new_classifier["Classes"] = self.dataset_train_info.dict_target
 
         # scale
-        target_pixel_size_file = os.path.join(self.trainResultsWidget.dataset_folder,
-                                              "target-pixel-size.txt")
+        target_pixel_size_file = os.path.join(self.trainResultsWidget.dataset_folder, "target-pixel-size.txt")
         fl = open(target_pixel_size_file, "r")
         line = fl.readline()
         fl.close()
@@ -4340,8 +4557,7 @@ class TagLab(QMainWindow):
     def trainYourNetwork(self):
 
         if self.trainYourNetworkWidget is None:
-            self.trainYourNetworkWidget = QtTYNWidget(self.project.labels, self.TAGLAB_VERSION,
-                                                      parent=self)
+            self.trainYourNetworkWidget = QtTYNWidget(self.project.labels, self.TAGLAB_VERSION, parent=self)
             self.trainYourNetworkWidget.setWindowModality(Qt.WindowModal)
             self.trainYourNetworkWidget.launchTraining.connect(self.trainNewNetwork)
         self.trainYourNetworkWidget.show()
@@ -4366,8 +4582,7 @@ class TagLab(QMainWindow):
             return
 
         filters = " TIFF (*.tif *.tiff)"
-        output_filename, _ = QFileDialog.getSaveFileName(self, "Save raster as", self.taglab_dir,
-                                                         filters)
+        output_filename, _ = QFileDialog.getSaveFileName(self, "Save raster as", self.taglab_dir, filters)
 
         if output_filename:
 
@@ -4376,13 +4591,153 @@ class TagLab(QMainWindow):
             if self.project.working_area is None:
                 blobs = self.activeviewer.annotations.seg_blobs
             else:
-                blobs = self.activeviewer.annotations.calculate_inner_blobs(
-                    self.project.working_area)
+                blobs = self.activeviewer.annotations.calculate_inner_blobs(self.project.working_area)
 
             gf = self.activeviewer.image.georef_filename
             rasterops.saveClippedTiff(input_tiff, blobs, gf, output_filename)
 
             QApplication.restoreOverrideCursor()
+
+    @pyqtSlot()
+    def importCoralNetPointAnn(self):
+        """
+        Imports all point annotations to current map from a CSV file in CoralNet format.
+        This will automatically check the Name column and import only point annotations for it
+        (either in the original orthomosaic or tile coordinate space).
+        """
+        box = QMessageBox()
+
+        filters = "CSV (*.csv)"
+        file_name, _ = QFileDialog.getOpenFileName(self, "Open A .CSV File", self.taglab_dir, filters)
+
+        if os.path.exists(file_name):
+            self.disableSplitScreen()
+
+            # Get the current image
+            channel = self.activeviewer.image.getRGBChannel()
+
+            try:
+                QApplication.setOverrideCursor(Qt.WaitCursor)
+
+                # Open the file, and draw all the points on viewer
+                self.activeviewer.annotations.importCoralNetCSVAnn(file_name, channel)
+                self.activeviewer.drawAllPointsAnn()
+                # TODO how to update class in DataTable without having to reload TagLab project?
+                self.updateDataPanel()
+                self.updatePanels()
+                box.setText(f"Point annotations imported successfully!")
+                box.exec()
+
+            except Exception as e:
+                box.setText(f"File provided not in CoralNet format! {e}")
+                box.exec()
+        else:
+            box.setText("File path provided is not valid!")
+            box.exec()
+
+        QApplication.restoreOverrideCursor()
+
+    @pyqtSlot()
+    def exportCoralNetPointAnn(self):
+        """
+        Exports just a CSV in CoralNet format for all the point annotations in the
+        user specified work area.
+        """
+        box = QMessageBox()
+
+        # Default output folder
+        self.temp_folder = os.path.dirname(os.path.realpath(__file__))
+        self.temp_folder = f"{self.temp_folder}\\temp"
+
+        # User specifies output folder
+        folder_name = QFileDialog.getExistingDirectory(self, "Choose a Folder for the export", self.temp_folder)
+
+        if not folder_name:
+            return
+
+        # Force split screen off
+        self.disableSplitScreen()
+
+        # Get the current image, and the points for it
+        channel = self.activeviewer.image.getRGBChannel()
+        annotations = self.activeviewer.annotations
+
+        # Get the working area (if none, whole ortho is used)
+        working_area = self.project.working_area
+
+        try:
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+
+            # Save all the annotations to a CSV file in the directory chosen
+            csv_file = self.activeviewer.annotations.exportCoralNetCSVAnn(folder_name,
+                                                                          channel,
+                                                                          annotations,
+                                                                          working_area)
+
+            box.setText(f"Exported data to {os.path.basename(csv_file)}")
+            box.exec()
+
+        except Exception as e:
+            box.setText(f"Failed to export data to CoralNet format! {e}")
+            box.exec()
+
+        QApplication.restoreOverrideCursor()
+
+    @pyqtSlot()
+    def exportCoralNetPointData(self):
+        """
+        Exports point annotation and images for uploading to CoralNet.
+        """
+        box = QMessageBox()
+
+        # Default output folder
+        self.temp_folder = os.path.dirname(os.path.realpath(__file__))
+        self.temp_folder = f"{self.temp_folder}\\temp"
+
+        # User specifies output folder
+        folder_name = QFileDialog.getExistingDirectory(self, "Choose a Folder for the export", self.temp_folder)
+
+        if not folder_name:
+            return
+
+        # Force split screen off
+        self.disableSplitScreen()
+
+        # Get the current image, and the points for it
+        channel = self.activeviewer.image.getRGBChannel()
+        annotations = self.activeviewer.annotations
+
+        # Get the working area (if none, whole ortho is used)
+        working_area = self.project.working_area
+
+        try:
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+
+            # Save all the annotations to a CSV file in the directory chosen
+            output_dir, csv_file = self.activeviewer.annotations.exportCoralNetData(folder_name,
+                                                                                    channel,
+                                                                                    annotations,
+                                                                                    working_area)
+
+            box.setText(f"Exported data to {os.path.basename(csv_file)}")
+            box.exec()
+
+        except Exception as e:
+            box.setText(f"Failed to export data to CoralNet format! {e}")
+            box.exec()
+
+        QApplication.restoreOverrideCursor()
+
+    @pyqtSlot()
+    def openCoralNetToolbox(self):
+        """
+
+        """
+        try:
+            self.coralNetToolbox = CoralNetToolboxWidget(self)
+            self.coralNetToolbox.show()
+        except Exception as e:
+            print(f"{e}")
 
     @pyqtSlot()
     def calculateAreaUsingSlope(self):
@@ -4466,8 +4821,7 @@ class TagLab(QMainWindow):
 
         except Exception as e:
             msgBox = QMessageBox()
-            msgBox.setText(
-                "The json project contains an error:\n {0}\n\nPlease contact us.".format(str(e)))
+            msgBox.setText("The json project contains an error:\n {0}\n\nPlease contact us.".format(str(e)))
             msgBox.exec()
             return
 
@@ -4502,10 +4856,11 @@ class TagLab(QMainWindow):
         message = "[PROJECT] The project " + self.project.filename + " has been saved."
         logfile.info(message)
 
+    # Additional Features
     @pyqtSlot()
     def iView(self):
         """
-
+        Activated after user presses iView button, and when they press the Z-key
         """
         if self.activeviewer is None or self.activeviewer.image is None:
             self.move()
@@ -4513,7 +4868,7 @@ class TagLab(QMainWindow):
 
         if self.iViewWidget is None:
             self.btniView.setChecked(True)
-            self.iViewWidget = QtiView()
+            self.iViewWidget = QtiViewWidget()
             self.iViewWidget.setAttribute(Qt.WA_DeleteOnClose)
             self.iViewWidget.setWindowModality(Qt.NonModal)
             self.iViewWidget.btnExit.clicked.connect(self.deleteiViewWidget)
@@ -4522,10 +4877,11 @@ class TagLab(QMainWindow):
         else:
             self.deleteiViewWidget()
 
+    # Additional Features
     @pyqtSlot()
     def deleteiViewWidget(self):
         """
-        Closing occurs only when user presses Exit button on tool
+        Closing occurs only when user presses Exit button or X on tool
         """
         self.btniView.setChecked(False)
         del self.iViewWidget
@@ -4535,10 +4891,6 @@ class TagLab(QMainWindow):
     def resetNetworks(self):
 
         torch.cuda.empty_cache()
-
-        if self.deepextreme_net is not None:
-            del self.deepextreme_net
-            self.deepextreme_net = None
 
         if self.classifier is not None:
             del self.classifier
@@ -4587,8 +4939,8 @@ class TagLab(QMainWindow):
                 self.classifierWidget.sliderScores.valueChanged.connect(self.showScores)
                 self.activeviewer.tools.tools["SELECTAREA"].setAreaStyle("PREVIEW")
                 self.activeviewer.tools.tools["SELECTAREA"].released.connect(self.cropPreview)
-                self.activeviewer.tools.tools["SELECTAREA"].rectChanged[
-                    int, int, int, int].connect(self.classifierWidget.updatePreviewArea)
+                self.activeviewer.tools.tools["SELECTAREA"].rectChanged[int, int, int, int].connect(
+                    self.classifierWidget.updatePreviewArea)
 
             self.classifierWidget.show()
             self.classifierWidget.disableSliders()
@@ -4652,8 +5004,7 @@ class TagLab(QMainWindow):
 
             orthoimage = self.activeviewer.img_map
             target_pixel_size = classifier_selected['Scale']
-            self.classifier.setup(orthoimage, self.activeviewer.image.pixelSize(),
-                                  target_pixel_size,
+            self.classifier.setup(orthoimage, self.activeviewer.image.pixelSize(), target_pixel_size,
                                   working_area=[y, x, w, h], padding=256)
 
             self.progress_bar.showPerc()
@@ -4730,8 +5081,8 @@ class TagLab(QMainWindow):
 
             QApplication.processEvents()
 
-            message = "[AUTOCLASS] Automatic classification STARTS.. (classifier: )" + \
-                      classifier_selected['Classifier Name']
+            message = "[AUTOCLASS] Automatic classification STARTS.. (classifier: )" + classifier_selected[
+                'Classifier Name']
             logfile.info(message)
 
             self.classifier = MapClassifier(classifier_selected, self.project.labels)
@@ -4747,8 +5098,7 @@ class TagLab(QMainWindow):
 
                 orthoimage = self.activeviewer.img_map
                 target_pixel_size = classifier_selected['Scale']
-                self.classifier.setup(orthoimage, self.activeviewer.image.pixelSize(),
-                                      target_pixel_size,
+                self.classifier.setup(orthoimage, self.activeviewer.image.pixelSize(), target_pixel_size,
                                       working_area=self.project.working_area, padding=256)
 
                 self.progress_bar.showPerc()
@@ -4771,8 +5121,7 @@ class TagLab(QMainWindow):
 
                     offset = self.classifier.offset
                     scale = [self.classifier.scale_factor, self.classifier.scale_factor]
-                    created_blobs = self.activeviewer.annotations.import_label_map(filename,
-                                                                                   self.project.labels,
+                    created_blobs = self.activeviewer.annotations.import_label_map(filename, self.project.labels,
                                                                                    offset, scale)
                     for blob in created_blobs:
                         self.viewerplus.addBlob(blob, selected=False)
@@ -4817,19 +5166,19 @@ if __name__ == '__main__':
     app.setWindowIcon(QIcon(os.path.join(PATH_ICONS, "taglab50px.png")))
 
     slider_style1 = "\
-    QSlider::groove::horizontal\
-    {\
-        border: 1px solid;\
-        height: 8px;\
-        color: rgb(100,100,100);\
-    }"
+     QSlider::groove::horizontal\
+     {\
+         border: 1px solid;\
+         height: 8px;\
+         color: rgb(100,100,100);\
+     }"
 
     slider_style2 = "QSlider::handle::horizontal\
-    {\
-        background: white;\
-        border: 1;\
-        width: 18px;\
-    }"
+     {\
+         background: white;\
+         border: 1;\
+         width: 18px;\
+     }"
 
     app.setStyleSheet("QLabel {color: white}")
     app.setStyleSheet("QPushButton {background-color: rgb(49,51,53); color: white}")
@@ -4845,8 +5194,7 @@ if __name__ == '__main__':
     # set the application font
     if platform.system() != "Darwin":
         QFD = QFontDatabase()
-        font_id1 = QFD.addApplicationFont(
-            os.path.join(PATH_FONTS, "opensans/OpenSans-Regular.ttf"))
+        font_id1 = QFD.addApplicationFont(os.path.join(PATH_FONTS, "opensans/OpenSans-Regular.ttf"))
         if font_id1 == -1:
             print("Failed to load application font..")
             sys.exit(-2)

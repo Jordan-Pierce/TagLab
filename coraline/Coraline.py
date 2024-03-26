@@ -1,11 +1,13 @@
 import ctypes as C
 from ctypes import cdll
 import sys
-import source.utils as utils
 from skimage.filters import gaussian
 from skimage.restoration import denoise_bilateral
 import numpy as np
 from os import path
+
+from source import utils
+from source import genutils
 
 this_directory = path.abspath(path.dirname(__file__))
 
@@ -21,32 +23,40 @@ try:
 
 except:
 	lib = None
-	
+
 if lib == None:
 	print('Could not load libcoraline')
 
-#import numpy as np
 
-def mutual(img, linewidth = 30, gaussian = 5, nbins = 16, extension = 1):
+# import numpy as np
+
+def mutual(img, linewidth=30, gaussian=5, nbins=16, extension=1):
+	"""
+
+	"""
 	if lib is None:
 		raise Exception("Coraline library (libcoraline.so, coraline.dll) not found.")
 
 	w = img.shape[1]
 	h = img.shape[0]
 
-	lib.Coraline_mutual(C.c_void_p(img.ctypes.data),  C.c_int(w), C.c_int(h),
-	                      C.c_int(linewidth), C.c_float(gaussian), C.c_int(nbins), C.c_int(extension))
+	lib.Coraline_mutual(C.c_void_p(img.ctypes.data), C.c_int(w), C.c_int(h),
+						C.c_int(linewidth), C.c_float(gaussian), C.c_int(nbins), C.c_int(extension))
 
-def segment(img, depth, mask, clippoints, l = 0, conservative = 0.1, grow = 0, radius = 30, depth_weight = 0.0):
+
+def segment(img, depth, mask, clippoints, l=0, conservative=0.1, grow=0, radius=30, depth_weight=0.0):
+	"""
+
+	"""
 	if lib is None:
 		raise Exception("Coraline library (libcoraline.so, coraline.dll) not found.")
 
-	img = gaussian(img, sigma = 1.5)
-	img = img*255;
+	img = gaussian(img, sigma=1.5)
+	img = img * 255
 	img = img.astype(np.uint8)
 
-	#qimg = utils.rgbToQImage(img)
-	#qimg.save("Smoothed.jpg")
+	# qimg = genutils.rgbToQImage(img)
+	# qimg.save("Smoothed.jpg")
 
 	w = img.shape[1]
 	h = img.shape[0]
@@ -60,8 +70,9 @@ def segment(img, depth, mask, clippoints, l = 0, conservative = 0.1, grow = 0, r
 	if depth is not None:
 		d = depth.copy()
 		depthPtr = d.ctypes.data
-	#qimg = utils.rgbToQImage(depth)
-	#qimg.save("Depth.png")
+
+	# qimg = genutils.rgbToQImage(depth)
+	# qimg.save("Depth.png")
 
 	clippointsPtr = None
 	nclips = 0
@@ -70,10 +81,12 @@ def segment(img, depth, mask, clippoints, l = 0, conservative = 0.1, grow = 0, r
 		clippointsPtr = clippoints.ctypes.data
 		nclips = clippoints.shape[0]
 
-	#print(C.c_float(l), l)
-	lib.Coraline_segment(C.c_void_p(img.ctypes.data), C.c_void_p( depthPtr), C.c_void_p(mask.ctypes.data), C.c_int(w), C.c_int(h),
+	# print(C.c_float(l), l)
+	lib.Coraline_segment(C.c_void_p(img.ctypes.data), C.c_void_p(depthPtr), C.c_void_p(mask.ctypes.data), C.c_int(w),
+						 C.c_int(h),
 						 C.c_void_p(clippointsPtr), C.c_int(nclips),
-                         C.c_float(l), C.c_float(conservative), C.c_float(grow), C.c_float(radius), C.c_float(depth_weight))
+						 C.c_float(l), C.c_float(conservative), C.c_float(grow), C.c_float(radius),
+						 C.c_float(depth_weight))
 
 #
 # class Coraline(object):
@@ -130,10 +143,9 @@ def segment(img, depth, mask, clippoints, l = 0, conservative = 0.1, grow = 0, r
 #
 
 
-
-#mask = np.zeros((100,100))
-#image =  np.zeros((100, 100))
-#mutual(image, 100, 100)
-#coraline = Coraline(image, mask)
-#mask = coraline.segment()
-#print(mask)
+# mask = np.zeros((100,100))
+# image =  np.zeros((100, 100))
+# mutual(image, 100, 100)
+# coraline = Coraline(image, mask)
+# mask = coraline.segment()
+# print(mask)
