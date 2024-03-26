@@ -18,6 +18,7 @@
 # for more details.
 
 import os
+import shutil
 import sys
 import glob
 import json
@@ -25,10 +26,11 @@ from io import TextIOBase
 
 import pandas as pd
 
+from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt, pyqtSlot, pyqtSignal
 from PyQt5.QtWidgets import QWidget, QFileDialog, QApplication, QMessageBox, QTextEdit
-from PyQt5.QtWidgets import QSizePolicy, QLineEdit, QLabel, QPushButton, QHBoxLayout, QVBoxLayout
 from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QScrollArea, QHeaderView, QComboBox
+from PyQt5.QtWidgets import QSizePolicy, QLineEdit, QLabel, QPushButton, QHBoxLayout, QVBoxLayout
 
 from source.tools.CoralNetToolbox.API import submit_jobs
 from source.tools.CoralNetToolbox.Upload import upload_images
@@ -54,6 +56,8 @@ class ConsoleWidget(QTextEdit):
         self._console_output = ConsoleOutput(self)
         sys.stdout = self._console_output
         sys.stderr = self._console_output
+        font = QFont("Courier New", 8)
+        self.setFont(font)
 
     def clearConsole(self):
         self.clear()
@@ -131,16 +135,27 @@ class CoralNetToolboxWidget(QWidget):
         # Set items in table to be non-editable
         self.source_list_table.setEditTriggers(QTableWidget.NoEditTriggers)
 
+        # Create search box
+        self.search_box = QLineEdit()
+        self.search_box.setPlaceholderText("Search...")
+        self.search_box.textChanged.connect(self.filterSourceList)
+
         # Source List Widget Layout
         self.layoutLeftPanel = QVBoxLayout()
 
-        # Add header and informational text to the layout
+        # Source List (Left) Layout
         self.layoutLeftPanel.addWidget(header_label)
         self.layoutLeftPanel.addWidget(self.source_list_table)
+        self.layoutLeftPanel.addWidget(self.search_box)
 
         # -----------------------------------
         # CoralNet Parameters (Middle Panel)
         # -----------------------------------
+
+        # Header Label
+        header_label = QLabel("Parameters")
+        header_label.setStyleSheet("font-weight: bold; font-size: 24px; color: white;")
+        header_label.setAlignment(Qt.AlignCenter)
 
         # Username
         layoutUsername = QHBoxLayout()
@@ -228,6 +243,34 @@ class CoralNetToolboxWidget(QWidget):
         self.btnSetSources.setMinimumWidth(500)
         layoutSetSourcesBtn.addWidget(self.btnSetSources)
 
+        # Minimum Tile Size
+        layoutMinTileSize = QHBoxLayout()
+        layoutMinTileSize.setAlignment(Qt.AlignLeft)
+        self.lblMinTileSize = QLabel("Min Tile Size: ")
+        self.lblMinTileSize.setFixedWidth(130)
+        self.lblMinTileSize.setMinimumWidth(130)
+        self.editMinTileSize = QLineEdit("")
+        self.editMinTileSize.setReadOnly(True)
+        self.editMinTileSize.setText("1024")
+        self.editMinTileSize.setStyleSheet("background-color: rgb(40,40,40); border: 1px solid rgb(90,90,90)")
+
+        layoutMinTileSize.addWidget(self.lblMinTileSize)
+        layoutMinTileSize.addWidget(self.editMinTileSize)
+
+        # Maximum Tile Size
+        layoutMaxTileSize = QHBoxLayout()
+        layoutMaxTileSize.setAlignment(Qt.AlignLeft)
+        self.lblMaxTileSize = QLabel("Max Tile Size: ")
+        self.lblMaxTileSize.setFixedWidth(130)
+        self.lblMaxTileSize.setMaximumWidth(130)
+        self.editMaxTileSize = QLineEdit("")
+        self.editMaxTileSize.setReadOnly(True)
+        self.editMaxTileSize.setText("8000")
+        self.editMaxTileSize.setStyleSheet("background-color: rgb(40,40,40); border: 1px solid rgb(90,90,90)")
+
+        layoutMaxTileSize.addWidget(self.lblMaxTileSize)
+        layoutMaxTileSize.addWidget(self.editMaxTileSize)
+
         # Output Folder
         layoutOutputFolder = QHBoxLayout()
         layoutOutputFolder.setAlignment(Qt.AlignLeft)
@@ -246,15 +289,24 @@ class CoralNetToolboxWidget(QWidget):
         layoutOutputFolder.addWidget(self.editOutputFolder)
         layoutOutputFolder.addWidget(self.btnOutputFolder)
 
-        # -----------------------
-        # Console Widget
-        # -----------------------
-        self.console_widget = ConsoleWidget()
-        self.console_widget.setFixedHeight(400)
+        # Delete temporary files option
+        layoutDeleteTemp = QHBoxLayout()
+        layoutDeleteTemp.setAlignment(Qt.AlignLeft)
+        self.lblDeleteTemp = QLabel("Delete Files: ")
+        self.lblDeleteTemp.setFixedWidth(130)
+        self.lblDeleteTemp.setMinimumWidth(130)
+        self.comboDeleteTemp = QComboBox()
+        self.comboDeleteTemp.addItems(["False", "True"])
+        self.comboDeleteTemp.setCurrentIndex(0)
 
-        # -----------------------
+        layoutDeleteTemp.addWidget(self.lblDeleteTemp)
+        layoutDeleteTemp.addWidget(self.comboDeleteTemp)
+
+        # Console
+        self.console_widget = ConsoleWidget()
+        self.console_widget.setMinimumHeight(350)
+
         # Buttons
-        # -----------------------
         layoutButtons = QHBoxLayout()
         layoutButtons.setAlignment(Qt.AlignRight)
         layoutButtons.addStretch()
@@ -267,9 +319,7 @@ class CoralNetToolboxWidget(QWidget):
         layoutButtons.addWidget(self.btnApply)
         layoutButtons.addWidget(self.btnExit)
 
-        # -------------------------
-        # Parameters Layout
-        # -------------------------
+        # CoralNet Parameters (Middle) Layout
         layoutParameters = QVBoxLayout()
 
         layoutParameters.addLayout(layoutUsername)
@@ -278,12 +328,16 @@ class CoralNetToolboxWidget(QWidget):
         layoutParameters.addLayout(layoutSourceID1)
         layoutParameters.addLayout(layoutSourceID2)
         layoutParameters.addLayout(layoutSetSourcesBtn)
+        layoutParameters.addLayout(layoutMinTileSize)
+        layoutParameters.addLayout(layoutMaxTileSize)
         layoutParameters.addLayout(layoutOutputFolder)
-        layoutParameters.addWidget(self.console_widget)
-        layoutParameters.addLayout(layoutButtons)
+        layoutParameters.addLayout(layoutDeleteTemp)
 
         layoutMiddlePanel = QVBoxLayout()
+        layoutMiddlePanel.addWidget(header_label)
         layoutMiddlePanel.addLayout(layoutParameters)
+        layoutMiddlePanel.addWidget(self.console_widget)
+        layoutMiddlePanel.addLayout(layoutButtons)
 
         # ----------------------------
         # Label Mapping (Right Panel)
@@ -323,11 +377,7 @@ class CoralNetToolboxWidget(QWidget):
         # Source List Widget Layout
         self.layoutRightPanel = QVBoxLayout()
 
-        # -------------------------
-        # Right Panel Layout
-        # -------------------------
-
-        # Add header, buttons, and mapping widget to the layout
+        # Label Mapping (Right) Layout
         self.layoutRightPanel.addWidget(header_label)
         self.layoutRightPanel.addWidget(self.label_mapping_scroll_area)
         self.layoutRightPanel.addLayout(buttons_layout)
@@ -455,6 +505,20 @@ class CoralNetToolboxWidget(QWidget):
 
         self.console_widget.clearConsole()
         QApplication.restoreOverrideCursor()
+
+    @pyqtSlot(str)
+    def filterSourceList(self, search_text):
+        """
+        Filter the rows in the source list table based on the search text.
+        """
+        for row in range(self.source_list_table.rowCount()):
+            match = False
+            for column in range(self.source_list_table.columnCount() - 1):
+                item_text = self.source_list_table.item(row, column).text().lower()
+                if search_text.lower() in item_text:
+                    match = True
+                    break
+            self.source_list_table.setRowHidden(row, not match)
 
     def addRowToLabelMapping(self, left_label, right_label):
         """
@@ -621,6 +685,9 @@ class CoralNetToolboxWidget(QWidget):
             # Import predictions back to TagLab
             self.taglabImport()
 
+            # Delete if user specified
+            self.deleteTempData()
+
             # Close if successful
             self.close()
 
@@ -642,12 +709,20 @@ class CoralNetToolboxWidget(QWidget):
         channel = self.parent().activeviewer.image.getRGBChannel()
         annotations = self.parent().activeviewer.annotations
         working_area = self.parent().project.working_area
+        min_tile_size = int(self.editMinTileSize.text())
+        max_tile_size = int(self.editMaxTileSize.text())
+
+        # Check that tile sizes are correct
+        if min_tile_size < 224 or max_tile_size > 8000 or min_tile_size > max_tile_size:
+            raise Exception("Tile size must be within [224 - 8000]")
 
         # Export the data
         output_dir, csv_file = self.parent().activeviewer.annotations.exportCoralNetData(self.output_folder,
                                                                                          channel,
                                                                                          annotations,
-                                                                                         working_area)
+                                                                                         working_area,
+                                                                                         min_tile_size,
+                                                                                         max_tile_size)
         if os.path.exists(csv_file):
             self.output_folder = f"{output_dir}"
             self.tiles_folder = f"{output_dir}/tiles"
@@ -779,6 +854,18 @@ class CoralNetToolboxWidget(QWidget):
             print("NOTE: Predictions imported successfully")
         except Exception as e:
             raise Exception("TagLab annotations could not be imported")
+
+    def deleteTempData(self):
+        """
+
+        """
+        try:
+            # If True (1), delete the folder
+            if self.comboDeleteTemp.currentIndex():
+                shutil.rmtree(self.output_folder)
+        except:
+            # Fail silently, user likely has something open
+            pass
 
     def closeEvent(self, event):
         """
