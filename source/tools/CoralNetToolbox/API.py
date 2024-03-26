@@ -201,6 +201,7 @@ def convert_to_csv(status, image_names):
     model_predictions_list = []
 
     for data, image_name in zip(status['data'], image_names):
+        # Extract the point information if it was returned
         if 'points' in data['attributes']:
             for point in data['attributes']['points']:
                 p = dict()
@@ -213,6 +214,10 @@ def convert_to_csv(status, image_names):
                     p['Machine suggestion ' + str(index + 1)] = classification['label_code']
 
                 model_predictions_list.append(p)
+                
+        # If there aren't points, there was an error: print it
+        elif 'errors' in data['attributes']:
+            print(f"ERROR: {data['attributes']['errors'][0]}")
 
     # Create a single DataFrame from the list of dictionaries
     model_predictions = pd.DataFrame(model_predictions_list)
@@ -458,9 +463,6 @@ def submit_jobs(driver, source_id_1, source_id_2, prefix, images_w_points, point
         if not active_jobs and not payload_imgs:
             print("\nNOTE: All images have been processed; exiting loop.\n")
             finished = True
-
-    # Close the driver
-    driver.close()
 
     # Sort predictions to match original points file, keep original columns
     print("NOTE: Sorting predictions to align with original file provided")

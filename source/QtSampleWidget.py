@@ -52,7 +52,8 @@ class QtSampleWidget(QWidget):
 
         self.lblOFF = QLabel("Offset (px): ")
         self.editOFF = QLineEdit()
-        self.editOFF.setPlaceholderText("Type pixels of offset")
+        self.editOFF.setPlaceholderText("Type pixels of offset (>=1)")
+        self.editOFF.setText("1")
 
         layoutHOFF.addWidget(self.lblOFF)
         layoutHOFF.addWidget(self.editOFF)
@@ -100,9 +101,10 @@ class QtSampleWidget(QWidget):
             self.choosednumber = int(self.editNumber.text())
 
         if self.editOFF.text() == "" or self.editOFF.text().isnumeric() == False:
-            self.offset = 0
+            self.offset = 1
         else:
             self.offset = int(self.editOFF.text())
+            self.offset = self.offset if self.offset > 0 else 1
 
         self.validchoices.emit()
 

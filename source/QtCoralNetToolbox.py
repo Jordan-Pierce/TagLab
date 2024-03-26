@@ -90,7 +90,7 @@ class CoralNetToolboxWidget(QWidget):
         self.driver = None
 
         # Tile size
-        self.tile_size = 1024
+        self.tile_size = 8000
 
         # --------------------
         # The window settings
@@ -105,7 +105,7 @@ class CoralNetToolboxWidget(QWidget):
                             Qt.WindowMaximizeButtonHint)
 
         # Set window size policy to fixed size to disable resizing
-        self.setFixedSize(1800, 800)
+        self.setFixedSize(1900, 800)
 
         self.setStyleSheet("background-color: rgba(60,60,65,100); color: white")
 
@@ -117,12 +117,6 @@ class CoralNetToolboxWidget(QWidget):
         header_label = QLabel("Source List")
         header_label.setStyleSheet("font-weight: bold; font-size: 24px; color: white;")
         header_label.setAlignment(Qt.AlignCenter)
-
-        # Scroll Area for Source List Widget
-        self.source_list_scroll_area = QScrollArea()
-        self.source_list_scroll_area.setWidgetResizable(True)
-        self.source_list_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-        self.source_list_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         # Source List Table Widget
         self.source_list_table = QTableWidget()
@@ -139,14 +133,13 @@ class CoralNetToolboxWidget(QWidget):
 
         # Set items in table to be non-editable
         self.source_list_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.source_list_scroll_area.setWidget(self.source_list_table)
 
         # Source List Widget Layout
         self.layoutLeftPanel = QVBoxLayout()
 
         # Add header and informational text to the layout
         self.layoutLeftPanel.addWidget(header_label)
-        self.layoutLeftPanel.addWidget(self.source_list_scroll_area)
+        self.layoutLeftPanel.addWidget(self.source_list_table)
 
         # -----------------------------------
         # CoralNet Parameters (Middle Panel)
@@ -529,6 +522,7 @@ class CoralNetToolboxWidget(QWidget):
 
             # Add each row to the widget
             for i, r in self.labelset.iterrows():
+                # Displaying the CoralNet 'Name', not 'Short Code'
                 self.addRowToLabelMapping(r['Name'], r['Name'])
 
         except Exception as e:
@@ -581,7 +575,7 @@ class CoralNetToolboxWidget(QWidget):
 
         if filename:
             mapping_data = []
-            # Loop through the JSON file
+            # Loop through the mapping label table
             for index in range(self.mapping_layout.count()):
                 # Get the current row
                 row_widget = self.mapping_layout.itemAt(index).widget()
@@ -612,6 +606,7 @@ class CoralNetToolboxWidget(QWidget):
         # Good or Bad box
         msgBox = QMessageBox()
         QApplication.setOverrideCursor(Qt.WaitCursor)
+        self.console_widget.clearConsole()
 
         self.output_folder = self.editOutputFolder.text()
         self.output_folder = f"{self.output_folder}/{get_now()}"
@@ -629,18 +624,21 @@ class CoralNetToolboxWidget(QWidget):
             # to get predictions for uploaded tiles
             self.coralnetAPI()
 
+            # Map the labels from CoralNet to TagLab
+            # based on what the user specified
+            self.taglabMapLabels()
+
             # Import predictions back to TagLab
             self.taglabImport()
+
+            # Close if successful
+            self.close()
 
             QApplication.restoreOverrideCursor()
             msgBox.setText(f"Imported predictions successfully")
             msgBox.exec()
 
-            # Close the widget
-            self.close()
-
         except Exception as e:
-            self.console_widget.clearConsole()
             QApplication.restoreOverrideCursor()
             msgBox.setText(f"{e}")
             msgBox.exec()
@@ -721,6 +719,7 @@ class CoralNetToolboxWidget(QWidget):
                                                                 images_w_points,
                                                                 points,
                                                                 self.output_folder)
+
             # Check that the file was created
             if os.path.exists(self.predictions_file):
                 print("NOTE: Predictions made successfully")
@@ -729,6 +728,56 @@ class CoralNetToolboxWidget(QWidget):
 
         except Exception as e:
             raise Exception(f"CoralNet API failed. {e}")
+
+    def getLabelMapping(self):
+        """
+        Returns the mapping between the original CoralNet label 'Name',
+        and the user provided label for in TagLab.
+        """
+        mapping = {}
+
+        # Loop through the mapping label table
+        for index in range(self.mapping_layout.count()):
+            # Get the current row
+            row_widget = self.mapping_layout.itemAt(index).widget()
+            if row_widget:
+                # Extract the CoralNet and TagLab labels
+                left = row_widget.findChild(QLineEdit).text()
+                right = row_widget.findChild(QComboBox).currentText()
+                # Create the mapping
+                mapping[left] = right
+
+        return mapping
+
+    def taglabMapLabels(self):
+        """
+
+        """
+        try:
+            # Mapping between CoralNet 'Name' to 'Short Code' (predictions)
+            short_code_mapping = self.labelset.set_index('Name')['Short Code'].to_dict()
+
+            # Mapping between CoralNet 'Name' to User defined mapping
+            name_mapping = self.getLabelMapping()
+
+            # Mapping between 'Short Code' and User defined mapping
+            short_code_to_label = {}
+
+            for name, user_label in name_mapping.items():
+                short_code = short_code_mapping.get(name)
+                if short_code is not None:
+                    short_code_to_label[short_code] = user_label
+
+            # Open the prediction file
+            df = pd.read_csv(self.predictions_file, sep=",", header=0)
+            # Create field for mapped label based on label mapping
+            # Use the "Machine suggestion 1" as the original value to map from
+            df['Mapped_Label'] = df['Machine suggestion 1'].map(short_code_to_label.get)
+            # Save the updated file
+            df.to_csv(self.predictions_file)
+
+        except Exception as e:
+            raise Exception(f"Label mapping failed. {e}")
 
     def taglabImport(self):
         """
@@ -747,5 +796,6 @@ class CoralNetToolboxWidget(QWidget):
 
         """
         self.driver = None
+        self.console_widget.clearConsole()
         sys.stdout = sys.__stdout__
         super().closeEvent(event)

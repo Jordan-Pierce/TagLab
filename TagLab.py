@@ -1116,8 +1116,7 @@ class TagLab(QMainWindow):
 
         exportCoralNetDataAct = QAction("Export Tiled Data for CoralNet", self)
         exportCoralNetDataAct.setStatusTip("Export Data for CoralNet Model Training")
-        # exportCoralNetDataAct.triggered.connect()
-        # TODO add ExportCoralNet Data in dropdown
+        exportCoralNetDataAct.triggered.connect(self.exportCoralNetPointData)
 
         openCoralNetToolboxAct = QAction("Open CoralNet-Toolbox...", self)
         openCoralNetToolboxAct.triggered.connect(self.openCoralNetToolbox)
@@ -4668,6 +4667,47 @@ class TagLab(QMainWindow):
                                                                           channel,
                                                                           annotations,
                                                                           working_area)
+
+            box.setText(f"Exported data to {os.path.basename(csv_file)}")
+            box.exec()
+
+        except Exception as e:
+            box.setText(f"Failed to export data to CoralNet format! {e}")
+            box.exec()
+
+        QApplication.restoreOverrideCursor()
+
+    @pyqtSlot()
+    def exportCoralNetPointData(self):
+        """
+        Exports point annotation and images for uploading to CoralNet.
+        """
+        box = QMessageBox()
+
+        # User specifies output folder
+        folder_name = QFileDialog.getExistingDirectory(self, "Choose a Folder for the export", "")
+
+        if not folder_name:
+            return
+
+        # Force split screen off
+        self.disableSplitScreen()
+
+        # Get the current image, and the points for it
+        channel = self.activeviewer.image.getRGBChannel()
+        annotations = self.activeviewer.annotations
+
+        # Get the working area (if none, whole ortho is used)
+        working_area = self.project.working_area
+
+        try:
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+
+            # Save all the annotations to a CSV file in the directory chosen
+            output_dir, csv_file = self.activeviewer.annotations.exportCoralNetData(folder_name,
+                                                                                    channel,
+                                                                                    annotations,
+                                                                                    working_area)
 
             box.setText(f"Exported data to {os.path.basename(csv_file)}")
             box.exec()
