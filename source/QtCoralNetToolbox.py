@@ -67,7 +67,7 @@ class CoralNetToolboxWidget(QWidget):
 
         # Default output folder
         self.temp_folder = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-        self.temp_folder = f"{self.temp_folder}\\temp\\Points"
+        self.temp_folder = f"{self.temp_folder}\\temp"
 
         # Parameters
         self.username = ""
@@ -245,12 +245,6 @@ class CoralNetToolboxWidget(QWidget):
         layoutOutputFolder.addWidget(self.lblOutputFolder)
         layoutOutputFolder.addWidget(self.editOutputFolder)
         layoutOutputFolder.addWidget(self.btnOutputFolder)
-
-        # Tile size (combobox, power of 2)
-        # TODO Add tile size limit (CoralNet allows 8k x 8k)
-
-        # Delete temporary data (check box)
-        # TODO boolean to delete temporary data in self.output_dir (make sure it's the right folder)
 
         # -----------------------
         # Console Widget

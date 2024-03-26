@@ -3293,9 +3293,11 @@ class TagLab(QMainWindow):
             id = self.activeviewer.annotations.getFreePointId()
             new_point = Point(int(point[0]), int(point[1]), 'Empty', id)
             self.activeviewer.image.annotations.addPoint(new_point)
+
             # Update progress bar
-            progress_bar.setProgress(float(p_idx / len(points) * 100.0))
-            QApplication.processEvents()
+            if p_idx % 10 == 0:
+                progress_bar.setProgress(float(p_idx / len(points) * 100.0))
+                QApplication.processEvents()
 
         # Close progress bar
         progress_bar.close()
@@ -4643,8 +4645,12 @@ class TagLab(QMainWindow):
         """
         box = QMessageBox()
 
+        # Default output folder
+        self.temp_folder = os.path.dirname(os.path.realpath(__file__))
+        self.temp_folder = f"{self.temp_folder}\\temp"
+
         # User specifies output folder
-        folder_name = QFileDialog.getExistingDirectory(self, "Choose a Folder for the export", "")
+        folder_name = QFileDialog.getExistingDirectory(self, "Choose a Folder for the export", self.temp_folder)
 
         if not folder_name:
             return
@@ -4662,7 +4668,7 @@ class TagLab(QMainWindow):
         try:
             QApplication.setOverrideCursor(Qt.WaitCursor)
 
-            # Save all the annotations to a CSV file in the directory choosen
+            # Save all the annotations to a CSV file in the directory chosen
             csv_file = self.activeviewer.annotations.exportCoralNetCSVAnn(folder_name,
                                                                           channel,
                                                                           annotations,
@@ -4684,8 +4690,12 @@ class TagLab(QMainWindow):
         """
         box = QMessageBox()
 
+        # Default output folder
+        self.temp_folder = os.path.dirname(os.path.realpath(__file__))
+        self.temp_folder = f"{self.temp_folder}\\temp"
+
         # User specifies output folder
-        folder_name = QFileDialog.getExistingDirectory(self, "Choose a Folder for the export", "")
+        folder_name = QFileDialog.getExistingDirectory(self, "Choose a Folder for the export", self.temp_folder)
 
         if not folder_name:
             return
