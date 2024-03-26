@@ -19,6 +19,7 @@
 
 import os
 import sys
+from datetime import datetime
 
 import csv
 from cv2 import fillPoly
@@ -1198,6 +1199,8 @@ class Annotation(QObject):
         basename = os.path.basename(image_name).split('.')[0]
 
         # Create the output directory to be based on ortho name
+        now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        output_dir = os.path.join(output_dir, now)
         tiles_dir = os.path.join(output_dir, "tiles")
         os.makedirs(tiles_dir, exist_ok=True)
 

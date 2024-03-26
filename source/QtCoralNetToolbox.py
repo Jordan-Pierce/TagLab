@@ -32,7 +32,7 @@ from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QScrollArea, QHeader
 
 from source.tools.CoralNetToolbox.API import submit_jobs
 from source.tools.CoralNetToolbox.Upload import upload_images
-from source.tools.CoralNetToolbox.Common import get_now, IMG_FORMATS
+from source.tools.CoralNetToolbox.Common import IMG_FORMATS
 from source.tools.CoralNetToolbox.Browser import login, authenticate, check_for_browsers, get_token
 from source.tools.CoralNetToolbox.Download import download_coralnet_sources, download_labelset
 
@@ -88,9 +88,6 @@ class CoralNetToolboxWidget(QWidget):
 
         # Driver
         self.driver = None
-
-        # Tile size
-        self.tile_size = 8000
 
         # --------------------
         # The window settings
@@ -609,7 +606,6 @@ class CoralNetToolboxWidget(QWidget):
         self.console_widget.clearConsole()
 
         self.output_folder = self.editOutputFolder.text()
-        self.output_folder = f"{self.output_folder}/{get_now()}"
 
         try:
             # Export point annotations and tiles from
@@ -657,8 +653,7 @@ class CoralNetToolboxWidget(QWidget):
         output_dir, csv_file = self.parent().activeviewer.annotations.exportCoralNetData(self.output_folder,
                                                                                          channel,
                                                                                          annotations,
-                                                                                         working_area,
-                                                                                         self.tile_size)
+                                                                                         working_area)
         if os.path.exists(csv_file):
             self.output_folder = f"{output_dir}"
             self.tiles_folder = f"{output_dir}/tiles"
