@@ -4719,7 +4719,7 @@ class TagLab(QMainWindow):
                                                                                     annotations,
                                                                                     working_area)
 
-            box.setText(f"Exported data to {os.path.basename(csv_file)}")
+            box.setText(f"Exported data to {os.path.basename(output_dir)}")
             box.exec()
 
         except Exception as e:
