@@ -89,8 +89,10 @@ from source.QtShapefileAttributeWidget import QtAttributeWidget
 from source.QtPanelInfo import QtPanelInfo
 from source.Sampler import Sampler
 
-from source.QtiView import QtiViewWidget
-from source.QtCoralNetToolbox import CoralNetToolboxWidget
+from source.QtiViewWidget import QtiViewWidget
+from source.QtImportViscoreWidget import QtImportViscoreWidget
+from source.QtCoralNetToolboxWidget import QtCoralNetToolboxWidget
+from source.QtExportCoralNetDataWidget import QtExportCoralNetDataWidget
 
 from source import genutils
 from source.Blob import Blob
@@ -1106,13 +1108,17 @@ class TagLab(QMainWindow):
         samplePointsAct.setStatusTip("Sample Points")
         samplePointsAct.triggered.connect(self.chooseSampling)
 
-        importPointsAct = QAction("Import CoralNet Point Annotations", self)
-        importPointsAct.setStatusTip("Import Point Annotations From .CSV")
-        importPointsAct.triggered.connect(self.importCoralNetPointAnn)
+        importViscorePointsAct = QAction("Import Viscore Point Annotations", self)
+        importViscorePointsAct.setStatusTip("Import Point Annotations From .CSV")
+        importViscorePointsAct.triggered.connect(self.importViscorePointAnn)
 
-        exportPointsAct = QAction("Export CoralNet Point Annotations", self)
-        exportPointsAct.setStatusTip("Export Point Annotations As .CSV")
-        exportPointsAct.triggered.connect(self.exportCoralNetPointAnn)
+        importCoralNetPointsAct = QAction("Import CoralNet Point Annotations", self)
+        importCoralNetPointsAct.setStatusTip("Import Point Annotations From .CSV")
+        importCoralNetPointsAct.triggered.connect(self.importCoralNetPointAnn)
+
+        exportCoralNetPointsAct = QAction("Export CoralNet Point Annotations", self)
+        exportCoralNetPointsAct.setStatusTip("Export Point Annotations As .CSV")
+        exportCoralNetPointsAct.triggered.connect(self.exportCoralNetPointAnn)
 
         exportCoralNetDataAct = QAction("Export Tiled Data for CoralNet", self)
         exportCoralNetDataAct.setStatusTip("Export Data for CoralNet Model Training")
@@ -1126,8 +1132,9 @@ class TagLab(QMainWindow):
         self.pointmenu.addAction(setWorkingAreaAct)
         self.pointmenu.addAction(samplePointsAct)
         self.pointmenu.addSeparator()
-        self.pointmenu.addAction(importPointsAct)
-        self.pointmenu.addAction(exportPointsAct)
+        self.pointmenu.addAction(importViscorePointsAct)
+        self.pointmenu.addAction(importCoralNetPointsAct)
+        self.pointmenu.addAction(exportCoralNetPointsAct)
         self.pointmenu.addAction(exportCoralNetDataAct)
         self.pointmenu.addSeparator()
         self.pointmenu.addAction(openCoralNetToolboxAct)
@@ -4599,6 +4606,17 @@ class TagLab(QMainWindow):
             QApplication.restoreOverrideCursor()
 
     @pyqtSlot()
+    def importViscorePointAnn(self):
+        """
+        Imports all point annotations to current map from a CSV file in from Viscore format.
+        """
+        try:
+            self.importViscorePoints = QtImportViscoreWidget(self)
+            self.importViscorePoints.show()
+        except Exception as e:
+            print(f"{e}")
+
+    @pyqtSlot()
     def importCoralNetPointAnn(self):
         """
         Imports all point annotations to current map from a CSV file in CoralNet format.
@@ -4622,9 +4640,7 @@ class TagLab(QMainWindow):
                 # Open the file, and draw all the points on viewer
                 self.activeviewer.annotations.importCoralNetCSVAnn(file_name, channel)
                 self.activeviewer.drawAllPointsAnn()
-                # TODO how to update class in DataTable without having to reload TagLab project?
-                self.updateDataPanel()
-                self.updatePanels()
+
                 box.setText(f"Point annotations imported successfully!")
                 box.exec()
 
@@ -4688,45 +4704,11 @@ class TagLab(QMainWindow):
         """
         Exports point annotation and images for uploading to CoralNet.
         """
-        box = QMessageBox()
-
-        # Default output folder
-        self.temp_folder = os.path.dirname(os.path.realpath(__file__))
-        self.temp_folder = f"{self.temp_folder}\\temp"
-
-        # User specifies output folder
-        folder_name = QFileDialog.getExistingDirectory(self, "Choose a Folder for the export", self.temp_folder)
-
-        if not folder_name:
-            return
-
-        # Force split screen off
-        self.disableSplitScreen()
-
-        # Get the current image, and the points for it
-        channel = self.activeviewer.image.getRGBChannel()
-        annotations = self.activeviewer.annotations
-
-        # Get the working area (if none, whole ortho is used)
-        working_area = self.project.working_area
-
         try:
-            QApplication.setOverrideCursor(Qt.WaitCursor)
-
-            # Save all the annotations to a CSV file in the directory chosen
-            output_dir, csv_file = self.activeviewer.annotations.exportCoralNetData(folder_name,
-                                                                                    channel,
-                                                                                    annotations,
-                                                                                    working_area)
-
-            box.setText(f"Exported data to {os.path.basename(output_dir)}")
-            box.exec()
-
+            self.exportCoralNetData = QtExportCoralNetDataWidget(self)
+            self.exportCoralNetData.show()
         except Exception as e:
-            box.setText(f"Failed to export data to CoralNet format! {e}")
-            box.exec()
-
-        QApplication.restoreOverrideCursor()
+            print(f"{e}")
 
     @pyqtSlot()
     def openCoralNetToolbox(self):
@@ -4734,7 +4716,7 @@ class TagLab(QMainWindow):
 
         """
         try:
-            self.coralNetToolbox = CoralNetToolboxWidget(self)
+            self.coralNetToolbox = QtCoralNetToolboxWidget(self)
             self.coralNetToolbox.show()
         except Exception as e:
             print(f"{e}")

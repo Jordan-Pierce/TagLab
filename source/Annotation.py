@@ -1067,6 +1067,7 @@ class Annotation(QObject):
 
         # Read in the csv file
         points = pd.read_csv(file_name, sep=",", header=0)
+        points = points.loc[:, ~points.columns.str.contains('^Unnamed')]
 
         # Check to see if the csv file has the expected columns
         assert 'Name' in points.columns, "'Name' not in file!"
@@ -1078,67 +1079,81 @@ class Annotation(QObject):
         assert len(points) > 0, f"No point annotations in found for '{image_name}'!"
 
         # Pattern for finding tiles (if imported from CoralNet Toolbox)
-        pattern = r'_tile(\d{4})_offx=(\d{5})_offy=(\d{5}).png'
+        pattern = r'_tile(\d{4})_offx=(\d{5})_offy=(\d{5})\.(png|jpg)'
 
         # Loop through the dataframe
         for i, r in points.iterrows():
 
+            pidx = None
+            note = ""
             point_data = {}
+            coralnet_data = {}
 
             # Includes all columns, not just the machine predictions.
+            # All information will be available to user, but needs to
+            # be shown to them via UI, it's just stored in the point.
+            # TODO TagLab needs a way to visualize the predictions
             for key in r.keys():
-                point_data[key] = r[key]
+                if "Machine" in key:
+                    coralnet_data[key] = r[key]
+                elif key in ['Name', 'Id', 'Class Name', 'Row', 'Column', 'Label', 'Note', 'TagLab_PID']:
+                    point_data[key] = r[key]
 
-            # Extract values (returns None else)
-            name = point_data.get('Name')
-            coordx = point_data.get('Column')
-            coordy = point_data.get('Row')
-            label = point_data.get('Label')
+            # Modify values as needed
+            name = str(point_data['Name'])
+            coordx = int(point_data['Column'])
+            coordy = int(point_data['Row'])
 
-            # CoralNet / Toolbox specific
-            pidx = point_data.get('TagLab_PID')
-            top_1 = point_data.get('Machine suggestion 1')
-            mapped = point_data.get('Mapped_Label')
+            if 'Label' in point_data:
+                label = point_data['Label']
+            else:
+                label = 'Empty'
 
-            # See if the row corresponds to a tile
-            match = re.search(pattern, name)
+            if 'Note' in point_data:
+                note = point_data['Note']
+                note = note if type(note) == str else ""
 
-            if match:
-                # Get the plot number and tile coordinates
-                plot_number = int(match.group(1))
-                offx = int(match.group(2))
-                offy = int(match.group(3))
-                # Adjust to ortho coordinates
-                coordx += offx
-                coordy += offy
+            # This point was in TagLab previously
+            if "TagLab_PID" in point_data:
+                # Search for the offset
+                pidx = point_data['TagLab_PID']
+                match = re.search(pattern, name)
+
+                if match:
+                    # Get the tile coordinates
+                    offx = int(match.group(2))
+                    offy = int(match.group(3))
+                    # Adjust to ortho coordinates
+                    coordx += offx
+                    coordy += offy
 
             # If the coordinates don't fall within the image, don't add
             if coordx < 0 or coordx > width or coordy < 0 or coordy > height:
                 continue
 
-            # Set the class name for the point based what information is available
-            if mapped:
-                class_name = mapped
-            elif top_1:
-                class_name = top_1
-            else:
-                class_name = label
+            point_data['Name'] = image_name
+            point_data['Column'] = coordx
+            point_data['Row'] = coordy
+            point_data['Note'] = note
+            point_data['Label'] = point_data['Class'] = label
 
-            # Look for an existing point id and update the class Name
+            # Look for an existing point
             if pidx in [a.id for a in self.annpoints]:
                 idx = [a.id for a in self.annpoints].index(pidx)
                 point_ann = self.annpoints[idx]
-                point_ann.class_name = class_name
-                # Update the attribute information
+                # If the label name changed, update it
+                point_ann.class_name = label
                 point_ann.data.update(point_data)
-                point_ann.notes = '\n'.join([f"{key}: {value}" for key, value in point_data.items()])
+                point_ann.data.update(coralnet_data)
                 self.annpoints[idx] = point_ann
             else:
-                # Create a new point object
-                point_ann = Point(coordx, coordy, class_name, self.getFreePointId())
-                point_ann.data = point_data
-                point_ann.notes = '\n'.join([f"{key}: {value}" for key, value in point_data.items()])
-                # Register the point
+                # Create a new point, don't add any additional information
+                point_ann = Point(coordx, coordy, label, self.getFreePointId())
+                # Make sure not to carry over incorrect data to a new point
+                point_data['Id'] = point_data['TagLab_ID'] = point_ann.id
+                # Update new point with correct data
+                point_ann.data.update(point_data)
+                point_ann.data.update(coralnet_data)
                 self.addPoint(point_ann)
 
     def exportCoralNetCSVAnn(self, output_dir, channel, annotations, working_area):
@@ -1167,36 +1182,47 @@ class Annotation(QObject):
             right = channel.qimage.width()
 
         # Loop through point annotations, find those inside the box
-        annpoints = []
+        points = []
 
-        for annpoint in annotations.annpoints:
+        for point in annotations.annpoints:
 
-            x = annpoint.coordx
-            y = annpoint.coordy
-            label = annpoint.class_name
-            pidx = annpoint.id
+            point_dict = point.toDict()
+            x = point_dict['X']
+            y = point_dict['Y']
 
             # If inside the box, add to subset
             if left <= x <= right and top <= y <= bottom:
-                annpoints.append([os.path.basename(image_name), pidx, y, x, label])
+                # Add the additional attributes
+                point_dict['Label'] = point.class_name
+                point_dict['Row'] = y
+                point_dict['Column'] = x
+                # Overwrite old data with new data
+                point_data = point.data.copy()
+                point_data.update(point_dict)
+                point_data['Name'] = os.path.basename(image_name)
+                point_data['TagLab_PID'] = point_data['Id']
+                # Add to list of points to export
+                points.append(point_data)
 
-        if annpoints:
-            df = pd.DataFrame(annpoints, columns=['Name', 'TagLab_PID', 'Row', 'Column', 'Label'])
-            df.to_csv(csv_file)
+        if points:
+            points = pd.DataFrame(points)
+            points.to_csv(csv_file)
         else:
             raise Exception("No points found in sampling area.")
 
         return csv_file
 
-    def exportCoralNetData(self, output_dir, channel, annotations, working_area, max_size=8000, min_size=1024):
+    def exportCoralNetData(self, output_dir, channel, annotations, working_area, tile_size=2048, max_size=8000):
         """
         The function exports a CoralNet formatted CSV file (Name, Row, Column, Label) for all points
         in the user-specified work area. Tiles are made, and point locations are based on the tile
         coordinates. See exportCoralNetCSVAnn for non-tiled points.
         """
+
         # Get the image basename
         _, image_name = os.path.split(channel.filename)
         basename = os.path.basename(image_name).split('.')[0]
+        img_width, img_height = channel.qimage.width(), channel.qimage.height()
 
         # Create the output directory to be based on ortho name
         now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -1210,57 +1236,75 @@ class Annotation(QObject):
         # Selected working area
         if working_area:
             top, left, width, height = working_area
+            bottom = top + height
+            right = left + width
         else:
-            top, left = 0, 0
-            width, height = channel.qimage.width(), channel.qimage.height()
+            top, left, width, height = 0, 0, img_width, img_height
+            bottom = top + height
+            right = left + width
+
+        # Ensure that working area is within image
+        top = 0 if top < 0 else top
+        left = 0 if left < 0 else left
+        bottom = bottom if bottom < img_height else img_height
+        right = right if right < img_width else img_width
+
+        # Update width and height
+        width = right - left
+        height = bottom - top
 
         # To hold all the tiled point annotations
         points = []
 
+        # If it's an area smaller than max_size, no need to tile
         if width < max_size and height < max_size:
-            # If the sampled region is less than the tile size limit, no need to tile
-            tile_name = f"{basename}.jpg"
+
+            # Working area
+            xoff, yoff = left, top
+            bbox = [top, left, width, height]
+
+            # Cropping the tile from original ortho
+            img_tile = genutils.cropQImage(channel.qimage, bbox)
+
+            # Naming convention
+            plot_idx = 0
+            tile_name = f"{basename}_tile{plot_idx:04d}_offx={xoff:05d}_offy={yoff:05d}.jpg"
             tile_path = os.path.join(tiles_dir, tile_name)
 
-            # Find all point annotations within the working area
-            ann_points_in_box = annotations.getAnnPointsWithinBox(0, tile_name, [top, left, width, height], 0, 0)
+            # Find all point annotations within the tile bounding box
+            ann_points_in_box = annotations.getAnnPointsWithinBox(tile_name, bbox, xoff, yoff)
 
             # If there are point annotations, save the image and add to the dataframe
             if ann_points_in_box:
-                channel.qimage.save(tile_path)
-                points.extend(ann_points_in_box)
+                img_tile.save(tile_path)
+                points = ann_points_in_box
 
         else:
-            # The sample region is larger than the limit, and needs to be tiled
-            num_tiles_x = math.ceil(width / min_size)
-            num_tiles_y = math.ceil(height / min_size)
-            tile_width = width // num_tiles_x
-            tile_height = height // num_tiles_y
+            # The area is too big, so tile
+            w_step = int(width / tile_size)
+            h_step = int(height / tile_size)
 
-            for j in range(num_tiles_y):
-                for i in range(num_tiles_x):
-                    # Top-left coordinate of the tile
-                    xoff = left + i * tile_width
-                    yoff = top + j * tile_height
+            w_size = int(width / w_step) + 1
+            h_size = int(height / h_step) + 1
 
-                    # Tile dimensions
-                    if i == num_tiles_x - 1:
-                        tile_width = width - i * tile_width
-                    if j == num_tiles_y - 1:
-                        tile_height = height - j * tile_height
-
-                    bbox = [yoff, xoff, tile_width, tile_height]
+            # Loop through the tiles
+            for j in range(h_step):
+                for i in range(w_step):
+                    # Calculate the offset and box for the tile
+                    xoff = left + w_size * i
+                    yoff = top + h_size * j
+                    bbox = [yoff, xoff, w_size, h_size]
 
                     # Cropping the tile from original ortho
-                    img_tile = channel.qimage.copy(bbox[1], bbox[0], bbox[2], bbox[3])
+                    img_tile = genutils.cropQImage(channel.qimage, bbox)
 
                     # Naming convention
-                    plot_idx = j * num_tiles_x + i
+                    plot_idx = i + j * w_step
                     tile_name = f"{basename}_tile{plot_idx:04d}_offx={xoff:05d}_offy={yoff:05d}.jpg"
                     tile_path = os.path.join(tiles_dir, tile_name)
 
                     # Find all point annotations within the tile bounding box
-                    ann_points_in_box = annotations.getAnnPointsWithinBox(plot_idx, tile_name, bbox, xoff, yoff)
+                    ann_points_in_box = annotations.getAnnPointsWithinBox(tile_name, bbox, xoff, yoff)
 
                     # If there are point annotations, save the tile and extend the points list
                     if ann_points_in_box:
@@ -1268,14 +1312,14 @@ class Annotation(QObject):
                         points.extend(ann_points_in_box)
 
         if points:
-            points = pd.DataFrame(points, columns=['Plot', 'Name', 'Row', 'Column', 'Label', 'TagLab_PID', 'X', 'Y'])
-            points.to_csv(csv_file, index=False)
+            points = pd.DataFrame(points)
+            points.to_csv(csv_file)
         else:
             raise Exception("No points found in the specified working area.")
 
         return output_dir, csv_file
 
-    def getAnnPointsWithinBox(self, plot_number, tile_name, box, xoff, yoff):
+    def getAnnPointsWithinBox(self, tile_name, box, xoff, yoff):
         """
         Simple function to get the point annotations within a work area for CoralNet.
         """
@@ -1290,23 +1334,25 @@ class Annotation(QObject):
 
         for point in self.annpoints:
 
-            x = point.coordx
-            y = point.coordy
-            label = point.class_name
-            pidx = point.id
+            # Get all the information from point
+            point_dict = point.toDict()
+            x = point_dict['X']
+            y = point_dict['Y']
 
             # If inside the box, add to subset
             if left <= x <= right and top <= y <= bottom:
+                # Add the additional attributes
+                point_dict['Name'] = tile_name
+                point_dict['Label'] = point.class_name
                 # Tile space coordinates
-                tile_row = y - yoff
-                tile_col = x - xoff
+                point_dict['Row'] = y - yoff
+                point_dict['Column'] = x - xoff
+                # Overwrite old data with new data
+                point_data = point.data.copy()
+                point_data.update(point_dict)
+                point_data['TagLab_PID'] = point_data['Id']
 
-                ann_points_in_box.append([plot_number,
-                                          tile_name,
-                                          tile_row,
-                                          tile_col,
-                                          label,
-                                          pidx,
-                                          x,
-                                          y])
+                # Add dict to list
+                ann_points_in_box.append(point_data)
+
         return ann_points_in_box

@@ -368,14 +368,20 @@ class Ritm(Tool):
 
         return True
 
-    def resetNetwork(self):
+    def drawBlob(self, blob):
         """
 
         """
-        torch.cuda.empty_cache()
-        if self.ritm_net is not None:
-            del self.ritm_net
-            self.ritm_net = None
+        scene = self.viewerplus.scene
+
+        # create the suitable brush
+        if self.blob_to_correct is None:
+            brush = QBrush(Qt.SolidPattern)
+            brush.setColor(Qt.white)
+        else:
+            brush = self.viewerplus.project.classBrushFromName(self.blob_to_correct)
+
+        utils.drawBlob(blob, brush, scene, self.viewerplus.transparency_value, redraw=False)
 
     def apply(self):
         """
@@ -410,6 +416,15 @@ class Ritm(Tool):
         self.points.reset()
         self.resetWorkArea()
 
+    def resetNetwork(self):
+        """
+
+        """
+        torch.cuda.empty_cache()
+        if self.ritm_net is not None:
+            del self.ritm_net
+            self.ritm_net = None
+
     def resetWorkArea(self):
         """
         The reset of the working area causes also the re-initialization of the RITM.
@@ -417,7 +432,11 @@ class Ritm(Tool):
         self.work_area_bbox = [0, 0, 0, 0]
         self.work_area_mask = None
         if self.work_area_item is not None:
+            self.viewerplus.scene.removeItem(self.work_area_text_tl)
+            self.viewerplus.scene.removeItem(self.work_area_text_br)
             self.viewerplus.scene.removeItem(self.work_area_item)
+            self.work_area_text_tl = None
+            self.work_area_text_br = None
             self.work_area_item = None
 
     def reset(self):
@@ -439,17 +458,3 @@ class Ritm(Tool):
         self.points.reset()
         self.resetWorkArea()
 
-    def drawBlob(self, blob):
-        """
-
-        """
-        scene = self.viewerplus.scene
-
-        # create the suitable brush
-        if self.blob_to_correct is None:
-            brush = QBrush(Qt.SolidPattern)
-            brush.setColor(Qt.white)
-        else:
-            brush = self.viewerplus.project.classBrushFromName(self.blob_to_correct)
-
-        utils.drawBlob(blob, brush, scene, self.viewerplus.transparency_value, redraw=False)

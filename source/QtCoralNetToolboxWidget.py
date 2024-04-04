@@ -26,7 +26,7 @@ from io import TextIOBase
 
 import pandas as pd
 
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QColor
 from PyQt5.QtCore import Qt, pyqtSlot, pyqtSignal
 from PyQt5.QtWidgets import QWidget, QFileDialog, QApplication, QMessageBox, QTextEdit
 from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QScrollArea, QHeaderView, QComboBox
@@ -63,11 +63,11 @@ class ConsoleWidget(QTextEdit):
         self.clear()
 
 
-class CoralNetToolboxWidget(QWidget):
+class QtCoralNetToolboxWidget(QWidget):
     closed = pyqtSignal()
 
     def __init__(self, parent=None):
-        super(CoralNetToolboxWidget, self).__init__(parent)
+        super(QtCoralNetToolboxWidget, self).__init__(parent)
 
         # Default output folder
         self.temp_folder = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
@@ -87,7 +87,7 @@ class CoralNetToolboxWidget(QWidget):
         self.source_list = None
         self.labelset = None
 
-        # TagLab labels
+        # TagLab labels # self.parent().project.labels[].fill
         self.taglab_labels = sorted(list(self.parent().project.labels.keys()))
 
         # Driver
@@ -104,9 +104,6 @@ class CoralNetToolboxWidget(QWidget):
                             Qt.WindowCloseButtonHint |
                             Qt.WindowMinimizeButtonHint |
                             Qt.WindowMaximizeButtonHint)
-
-        # Set window size policy to fixed size to disable resizing
-        self.setFixedSize(1900, 800)
 
         self.setStyleSheet("background-color: rgba(60,60,65,100); color: white")
 
@@ -243,33 +240,18 @@ class CoralNetToolboxWidget(QWidget):
         self.btnSetSources.setMinimumWidth(500)
         layoutSetSourcesBtn.addWidget(self.btnSetSources)
 
-        # Minimum Tile Size
-        layoutMinTileSize = QHBoxLayout()
-        layoutMinTileSize.setAlignment(Qt.AlignLeft)
-        self.lblMinTileSize = QLabel("Min Tile Size: ")
-        self.lblMinTileSize.setFixedWidth(130)
-        self.lblMinTileSize.setMinimumWidth(130)
-        self.editMinTileSize = QLineEdit("")
-        self.editMinTileSize.setReadOnly(True)
-        self.editMinTileSize.setText("1024")
-        self.editMinTileSize.setStyleSheet("background-color: rgb(40,40,40); border: 1px solid rgb(90,90,90)")
+        # Tile Size
+        layoutTileSize = QHBoxLayout()
+        layoutTileSize.setAlignment(Qt.AlignLeft)
+        self.lblTileSize = QLabel("Tile Size: ")
+        self.lblTileSize.setFixedWidth(130)
+        self.lblTileSize.setMinimumWidth(130)
+        self.editTileSize = QLineEdit("")
+        self.editTileSize.setText("2048")
+        self.editTileSize.setStyleSheet("background-color: rgb(40,40,40); border: 1px solid rgb(90,90,90)")
 
-        layoutMinTileSize.addWidget(self.lblMinTileSize)
-        layoutMinTileSize.addWidget(self.editMinTileSize)
-
-        # Maximum Tile Size
-        layoutMaxTileSize = QHBoxLayout()
-        layoutMaxTileSize.setAlignment(Qt.AlignLeft)
-        self.lblMaxTileSize = QLabel("Max Tile Size: ")
-        self.lblMaxTileSize.setFixedWidth(130)
-        self.lblMaxTileSize.setMaximumWidth(130)
-        self.editMaxTileSize = QLineEdit("")
-        self.editMaxTileSize.setReadOnly(True)
-        self.editMaxTileSize.setText("8000")
-        self.editMaxTileSize.setStyleSheet("background-color: rgb(40,40,40); border: 1px solid rgb(90,90,90)")
-
-        layoutMaxTileSize.addWidget(self.lblMaxTileSize)
-        layoutMaxTileSize.addWidget(self.editMaxTileSize)
+        layoutTileSize.addWidget(self.lblTileSize)
+        layoutTileSize.addWidget(self.editTileSize)
 
         # Output Folder
         layoutOutputFolder = QHBoxLayout()
@@ -328,8 +310,7 @@ class CoralNetToolboxWidget(QWidget):
         layoutParameters.addLayout(layoutSourceID1)
         layoutParameters.addLayout(layoutSourceID2)
         layoutParameters.addLayout(layoutSetSourcesBtn)
-        layoutParameters.addLayout(layoutMinTileSize)
-        layoutParameters.addLayout(layoutMaxTileSize)
+        layoutParameters.addLayout(layoutTileSize)
         layoutParameters.addLayout(layoutOutputFolder)
         layoutParameters.addLayout(layoutDeleteTemp)
 
@@ -520,28 +501,41 @@ class CoralNetToolboxWidget(QWidget):
                     break
             self.source_list_table.setRowHidden(row, not match)
 
-    def addRowToLabelMapping(self, left_label, right_label):
+    def addRowToLabelMapping(self, label_id, left_label, right_label):
         """
 
         """
         row_widget = QWidget()
         row_layout = QHBoxLayout(row_widget)
 
+        id_text_box = QLineEdit(label_id)
+        id_text_box.setReadOnly(True)
+        id_text_box.setMinimumWidth(50)
+        id_text_box.setMaximumWidth(50)
+        row_layout.addWidget(id_text_box)
+
         left_text_box = QLineEdit(left_label)
         left_text_box.setReadOnly(True)
-        left_text_box.setMinimumWidth(150)
-        left_text_box.setMaximumWidth(200)
+        left_text_box.setMinimumWidth(200)
+        left_text_box.setMaximumWidth(250)
         row_layout.addWidget(left_text_box)
 
-        arrow_label = QLabel("--->")
+        arrow_label = QLabel("->")
         arrow_label.setAlignment(Qt.AlignCenter)
         row_layout.addWidget(arrow_label)
 
         right_combo_box = QComboBox()
         right_combo_box.setEditable(True)
-        right_combo_box.setMinimumWidth(150)
-        right_combo_box.setMaximumWidth(200)
-        right_combo_box.addItems([right_label] + self.taglab_labels)
+        right_combo_box.setMinimumWidth(200)
+        right_combo_box.setMaximumWidth(250)
+        right_combo_box.addItem(right_label)
+
+        # Add TagLab labels and their colors
+        for index, label in enumerate(self.taglab_labels):
+            color = self.parent().project.labels[label].fill
+            right_combo_box.addItem(label)
+            # right_combo_box.setItemData(index, QColor(*color), Qt.BackgroundRole)
+
         row_layout.addWidget(right_combo_box)
 
         # Add the row
@@ -578,7 +572,7 @@ class CoralNetToolboxWidget(QWidget):
             # Add each row to the widget
             for i, r in self.labelset.iterrows():
                 # Displaying the CoralNet 'Name', not 'Short Code'
-                self.addRowToLabelMapping(r['Name'], r['Name'])
+                self.addRowToLabelMapping(r['Label ID'], r['Name'], r['Name'])
 
         except Exception as e:
             msgBox.setText(f"Could not load labelset. {e}")
@@ -614,10 +608,11 @@ class CoralNetToolboxWidget(QWidget):
             # Loop through and autofill
             for mapping in mapping_data:
                 # Get the corresponding mapping
+                label_id = mapping.get("Label ID", "")
                 left_label = mapping.get("CoralNet_Label", "")
                 right_label = mapping.get("TagLab_Label", "")
                 # Add row to mapping table
-                self.addRowToLabelMapping(left_label, right_label)
+                self.addRowToLabelMapping(label_id, left_label, right_label)
 
     @pyqtSlot()
     def taglabExportMapping(self):
@@ -636,14 +631,15 @@ class CoralNetToolboxWidget(QWidget):
                 row_widget = self.mapping_layout.itemAt(index).widget()
                 if row_widget:
                     # Extract the CoralNet and TagLab labels
-                    left_combo_box = row_widget.findChild(QLineEdit)
-                    right_combo_box = row_widget.findChild(QComboBox)
+                    id_box = row_widget.children()[1]
+                    left_box = row_widget.children()[2]
+                    right_box = row_widget.children()[4]
                     # Add to json
-                    if left_combo_box and right_combo_box:
-                        mapping_data.append({
-                            "CoralNet_Label": left_combo_box.text(),
-                            "TagLab_Label": right_combo_box.currentText()
-                        })
+                    mapping_data.append({
+                        "Label ID": id_box.text(),
+                        "CoralNet_Label": left_box.text(),
+                        "TagLab_Label": right_box.currentText()
+                    })
             # Write the JSON file
             with open(filename, 'w') as file:
                 json.dump(mapping_data, file, indent=4)
@@ -709,11 +705,10 @@ class CoralNetToolboxWidget(QWidget):
         channel = self.parent().activeviewer.image.getRGBChannel()
         annotations = self.parent().activeviewer.annotations
         working_area = self.parent().project.working_area
-        min_tile_size = int(self.editMinTileSize.text())
-        max_tile_size = int(self.editMaxTileSize.text())
+        tile_size = int(self.editTileSize.text())
 
         # Check that tile sizes are correct
-        if min_tile_size < 224 or max_tile_size > 8000 or min_tile_size > max_tile_size:
+        if tile_size < 224 or tile_size > 8000:
             raise Exception("Tile size must be within [224 - 8000]")
 
         # Export the data
@@ -721,8 +716,7 @@ class CoralNetToolboxWidget(QWidget):
                                                                                          channel,
                                                                                          annotations,
                                                                                          working_area,
-                                                                                         min_tile_size,
-                                                                                         max_tile_size)
+                                                                                         tile_size)
         if os.path.exists(csv_file):
             self.output_folder = f"{output_dir}"
             self.tiles_folder = f"{output_dir}/tiles"
@@ -762,7 +756,7 @@ class CoralNetToolboxWidget(QWidget):
             # Make sure the file exists
             if os.path.exists(self.annotations_file):
                 # Read it in
-                points = pd.read_csv(self.annotations_file, index_col=0)
+                points = pd.read_csv(self.annotations_file)
             else:
                 raise Exception(f"{self.annotations_file} does not exist")
 
@@ -771,6 +765,10 @@ class CoralNetToolboxWidget(QWidget):
             assert 'Row' in points.columns, "'Row' field not found in file"
             assert 'Column' in points.columns, "'Column' field not found in file"
             assert len(points) > 0, "No points found in file"
+
+            # Remove excess, unnecessary information
+            COLUMNS = ["Id", "X", "Y", "Class", "Note", "Name", "Label", "Row", "Column", "TagLab_PID"]
+            points = points[[col for col in points.columns if col in COLUMNS]]
 
             # Convert list of names to a list
             images_w_points = points['Name'].to_list()
@@ -806,8 +804,8 @@ class CoralNetToolboxWidget(QWidget):
             row_widget = self.mapping_layout.itemAt(index).widget()
             if row_widget:
                 # Extract the CoralNet and TagLab labels
-                left = row_widget.findChild(QLineEdit).text()
-                right = row_widget.findChild(QComboBox).currentText()
+                left = row_widget.children()[2].text()
+                right = row_widget.children()[4].currentText()
                 # Create the mapping
                 mapping[left] = right
 
@@ -828,16 +826,23 @@ class CoralNetToolboxWidget(QWidget):
             short_code_to_label = {}
 
             for name, user_label in name_mapping.items():
-                short_code = short_code_mapping.get(name)
+                short_code = short_code_mapping.get(name.strip())
                 if short_code is not None:
-                    short_code_to_label[short_code] = user_label
+                    short_code_to_label[short_code.strip()] = user_label
 
             # Open the prediction file
             df = pd.read_csv(self.predictions_file, sep=",", header=0)
+
             # Create field for mapped label based on label mapping
-            # Use the "Machine suggestion 1" as the original value to map from
-            df['Mapped_Label'] = df['Machine suggestion 1'].map(short_code_to_label.get)
+            # Use the "Machine suggestion N" as the original value to map from
+            for column in df.columns:
+                if 'Machine suggestion' in column:
+                    # The mapped predictionsh
+                    new_column_name = f"{column} (Mapped)"
+                    df[new_column_name] = df[column].map(short_code_to_label.get)
+
             # Save the updated file
+            df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
             df.to_csv(self.predictions_file)
 
         except Exception as e:

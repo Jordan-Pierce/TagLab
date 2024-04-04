@@ -148,7 +148,7 @@ class QtWorkingAreaWidget(QWidget):
         layout_h2.addWidget(self.edit_H)
 
         layout_edits = QVBoxLayout()
-        layout_edits.addWidget(QLabel("Coordinates (in pixel):"))
+        layout_edits.addWidget(QLabel("Coordinates (in pixels):"))
         layout_edits.addSpacing(10)
         layout_edits.addLayout(layout_h1)
         layout_edits.addLayout(layout_h2)
@@ -209,13 +209,13 @@ class QtWorkingAreaWidget(QWidget):
             pixel_height = int(self.edit_H.text())
 
             # Get the scale factor (millimeters per pixel)
-            scale_factor_mm_per_px = self.scale
+            scale_factor_mm_per_px = self.scale * 0.1
 
             # Convert pixel values to meters using the scale factor
-            meter_top = round(pixel_top * scale_factor_mm_per_px / 1000.0, 2)
-            meter_left = round(pixel_left * scale_factor_mm_per_px / 1000.0, 2)
-            meter_width = round(pixel_width * scale_factor_mm_per_px / 1000.0, 2)
-            meter_height = round(pixel_height * scale_factor_mm_per_px / 1000.0, 2)
+            meter_top = round(pixel_top * scale_factor_mm_per_px / 1000.0, 3)
+            meter_left = round(pixel_left * scale_factor_mm_per_px / 1000.0, 3)
+            meter_width = round(pixel_width * scale_factor_mm_per_px / 1000.0, 3)
+            meter_height = round(pixel_height * scale_factor_mm_per_px / 1000.0, 3)
 
             # Update metric version values
             self.edit_Y_m.setText(str(meter_top))
