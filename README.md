@@ -9,28 +9,9 @@ TagLab was created to support the activity of annotation and extraction of stati
 
 ![ScreenShot](screenshot.jpg)
 
+#### Warning ⚠️
 
-## Interaction
-TagLab allows to :
-
-- zoom and navigate a large map using (zoom/mouse wheel, pan/'Move' tool selected + left button). With every other tool selected the pan is activated with ctrl + left button
-- segment coral instances in a semi-automatic way by indicating the corals' extremes with the 4-clicks tool. This is achieved using the Deep Extreme Cut network fine-tuned on coral images. Deep Extreme Cut original code can be found here: https://github.com/scaelles/DEXTR-PyTorch
-- segment coral instances in a semi-automatic way by indicating the interior and the exterior of a coral using the positive-negative clicks tool. Use shift+left mouse button to assign the positive (the interior) points and shift+right mouse button to assign the negative (the exterior) points. This tool is based on the RITM interactive segmentation project, code and additional information can be found here: https://github.com/saic-vul/ritm_interactive_segmentation
-- assign a class with the 'Assign class' tool or double-clicking the class in the labels panel
-- Area, perimeter and other information are displayed in the region info panel on the right
-- simultaneously turn off the visibility of one or more classes, (ctrl + left button/disable all but the selected, shift + left button, inverse operation), change the class transparency using the above slider
-- perform boolean operations between existing labels (right button to open the menu)
-- refine the incorrect borders automatically with the Refine operation or manually with the 'Edit Border' tool
-- tracking coral changes in different time intervals
-- import depth information of the seafloor
-- import GeoTiff
-- draw coral internal cracks with the 'Create Crack' tool
-- make freehand measurements or measure the distance between centroids (Ruler tool).
-- save the annotations (as polygons) and import them into a new project
-- export a CSV file table containing the data of each coral colony
-- export a JPG file of a black background with totally opaque labels
-- export shapefiles
-- export a new dataset and train your network (!)
+This is a developmental fork from the original repository; changes are made here, like, really frequently... proceed with caution.
 
 #### ✨ New Features:
 - 10/2023
@@ -141,34 +122,6 @@ For further instructions on installing TagLab see below.
      python Taglab.py
      ```
    - This command starts TagLab, and you should now be able to use the tool within the activated conda environment.
-
-
-## Updating TagLab
-
-If you already installed TagLab and you need to update to a new version, you can just run the `update.py` script from the terminal (be sure to be into the TagLab main folder, see step 2):
-
-```
-python3 update.py
-```
-or, on Windows:
-
-```
-python.exe update.py
-```
-
-The script will automatically update TagLab to the newest version available in this repository.
-
-NOTE: If some package is missing, after an update, re-launch install.py .
-
-### Updating from 0.2
-
-If you are updating TagLab from 0.2 version, in order to download also the new networks, please run the `update.py` script twice:
-
-```
-python3 update.py
-python3 update.py
-```
-
 
 # Citation
 
