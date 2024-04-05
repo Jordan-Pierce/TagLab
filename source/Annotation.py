@@ -776,14 +776,13 @@ class Annotation(QObject):
         return created_blobs
 
     def export_data_table(self, project, image, imagename, filename, choice):
-        """
 
-        """
         working_area = project.working_area
         scale_factor = image.pixelSize()
         date = image.acquisition_date
 
         # create a list of instances
+
         blobindexlist = []
         pointindexlist = []
 
@@ -822,6 +821,7 @@ class Annotation(QObject):
         number_of_rows = len(visible_blobs) + len(visible_points)
 
         # create a common dictionary
+
         dict = {
             'Image name': [],
             'TagLab Id': np.zeros(number_of_rows, dtype=np.int64),
@@ -861,7 +861,6 @@ class Annotation(QObject):
             dict['TagLab Centroid x'][i] = round(blob.centroid[0], 1)
             dict['TagLab Centroid y'][i] = round(blob.centroid[1], 1)
             dict['TagLab Area'][i] = round(blob.area * scale_factor * scale_factor / 100, 2)
-
             if blob.surface_area > 0.0:
                 dict['TagLab Surf. area'][i] = round(blob.surface_area * scale_factor * scale_factor / 100, 2)
 
@@ -904,7 +903,6 @@ class Annotation(QObject):
             i = i + 1
 
         j = len(visible_blobs)
-
         for annpoint in visible_points:
             dict['Image name'].append(imagename)
             dict['TagLab Id'][j] = annpoint.id
@@ -952,7 +950,7 @@ class Annotation(QObject):
 
         # create dataframe
         df = pd.DataFrame(dict, columns=list(dict.keys()))
-        df.to_csv(filename, sep=' ', decimal=",", index=False)
+        df.to_csv(filename, sep=',', index=False)
 
     def export_image_data_for_Scripps(self, size, filename, project):
         """
