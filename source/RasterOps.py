@@ -205,7 +205,7 @@ def write_shapefile(project, image, blobs, georef_filename, out_shp):
     else:
         # Use a default EPSG (3857) so the file can be written
         geoinfo = rio.crs.CRS.from_epsg(3857)
-        transform = rio.transform.from_origin(0, 0, scale_factor, scale_factor)
+        transform = rio.transform.from_origin(0, 0, 1, 1)
 
     working_area = project.working_area
 
