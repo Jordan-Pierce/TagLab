@@ -679,6 +679,9 @@ class TagLab(QMainWindow):
 
         self.move()
 
+        # Initialize autosave after everything else
+        self.settings_widget.general_settings.checkbox_autosave.setChecked(True)
+
     def setGuiPreferences(self):
 
         settings = QSettings("VCLAB", "TagLab")

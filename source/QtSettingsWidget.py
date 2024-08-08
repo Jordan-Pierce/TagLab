@@ -36,7 +36,7 @@ class generalSettingsWidget(QWidget):
 
         self.settings = settings
 
-        self.autosave_interval = 0  # autosave disabled
+        self.autosave_interval = 0  # autosave enabled
 
         self.checkbox_autosave = QCheckBox("Autosave")
         self.spinbox_autosave_interval = QSpinBox()

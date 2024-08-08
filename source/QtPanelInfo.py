@@ -188,7 +188,12 @@ class QtPanelInfo(QTabWidget):
 
                 value = ""
                 if field == 'id' or field == 'class_name' or field == "note":
-                    value = getattr(ann, field)
+                    # Returns None instead of Error
+                    value = getattr(ann, field, None)
+                    # If None, skips (see below)
+                    if value is None:
+                        continue
+
                     if type(value) == int:
                         value = str(value)
 
@@ -212,5 +217,3 @@ class QtPanelInfo(QTabWidget):
             #      input.setChecked(value)
             elif attribute['type'] == 'keyword':
                 input.setCurrentText(value)
-
-        
