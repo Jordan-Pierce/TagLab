@@ -842,6 +842,10 @@ class TagLab(QMainWindow):
 
     @pyqtSlot()
     def autosave(self):
+
+        if not self.project.filename:
+            return
+
         filename, file_extension = os.path.splitext(self.project.filename)
         self.project.save(filename + "_autosave.json")
 
