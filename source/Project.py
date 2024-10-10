@@ -278,22 +278,26 @@ class Project(object):
 
     def loadDictionary(self, filename):
 
-        f = open(filename)
-        dictionary = json.load(f)
-        f.close()
+        try:
+            f = open(filename)
+            dictionary = json.load(f)
+            f.close()
 
-        self.dictionary_name = dictionary['Name']
-        self.dictionary_description = dictionary['Description']
-        labels = dictionary['Labels']
+            self.dictionary_name = dictionary['Name']
+            self.dictionary_description = dictionary['Description']
+            labels = dictionary['Labels']
 
-        self.labels = {}
-        for label in labels:
-            id = label['id']
-            name = label['name']
-            fill = label['fill']
-            border = label['border']
-            description = label['description']
-            self.labels[name] = Label(id=id, name=name, fill=fill, border=border)
+            self.labels = {}
+            for label in labels:
+                id = label['id']
+                name = label['name']
+                fill = label['fill']
+                border = label['border']
+                description = label['description']
+                self.labels[name] = Label(id=id, name=name, fill=fill, border=border)
+
+        except Exception as e:
+            QMessageBox.critical(None, "Error", "Error loading dictionary: " + str(e))
 
     def setDictionaryFromListOfLabels(self, labels):
         """

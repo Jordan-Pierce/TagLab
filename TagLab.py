@@ -488,11 +488,32 @@ class TagLab(QMainWindow):
 
         # LABELS PANEL
         self.labels_widget = QtTableLabel()
-        self.default_dictionary = self.settings_widget.settings.value("default-dictionary",
-                                                                      defaultValue="dictionaries/scripps.json",
-                                                                      type=str)
-        self.project.loadDictionary(self.default_dictionary)
-        self.labels_widget.setLabels(self.project, None)
+
+        try:
+            default_dict = "dictionaries/scripps.json"
+            self.default_dictionary = self.settings_widget.settings.value("default-dictionary",
+                                                                          defaultValue=default_dict,  # doesn't work
+                                                                          type=str)
+            if not os.path.exists(self.default_dictionary):
+                QMessageBox.warning(self,
+                                    "Warning",
+                                    f"Previously loaded dictionary {self.default_dictionary} not found! "
+                                    f"Attempting to load TagLab default {default_dict} instead.")
+
+                self.default_dictionary = default_dict
+                if not os.path.exists(self.default_dictionary):
+                    raise Exception(f"TagLab default dictionary {self.default_dictionary} not found! "
+                                    f"Please re-download it.")
+
+            # Re-set the default dictionary
+            self.settings_widget.settings.setValue("default-dictionary", self.default_dictionary)
+            # Load the dictionary, load the project
+            self.project.loadDictionary(self.default_dictionary)
+            self.labels_widget.setLabels(self.project, None)
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", str(e))
+
 
         groupbox_style = "QGroupBox\
           {\
@@ -4770,7 +4791,6 @@ class TagLab(QMainWindow):
         self.resetAll()
 
         QApplication.setOverrideCursor(Qt.WaitCursor)
-        # TODO check if loadProject actually works!
         try:
             self.project = loadProject(self.taglab_dir, filename, self.default_dictionary)
         except Exception as e:
