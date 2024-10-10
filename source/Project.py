@@ -297,7 +297,9 @@ class Project(object):
                 self.labels[name] = Label(id=id, name=name, fill=fill, border=border)
 
         except Exception as e:
-            QMessageBox.critical(None, "Error", "Error loading dictionary: " + str(e))
+            QMessageBox.critical(self,
+                                 "Error",
+                                 f"Error loading dictionary {filename}:" + str(e))
 
     def setDictionaryFromListOfLabels(self, labels):
         """
