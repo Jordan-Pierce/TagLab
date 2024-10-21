@@ -325,14 +325,16 @@ class SamInteractive(Tool):
         self.viewerplus.scene.invalidate()
 
     def resetNetwork(self):
-
-        torch.cuda.empty_cache()
-
-        if self.sam_net is not None:
-            del self.sam_net
-            self.sam_net = None
-            del self.predictor
-            self.predictor = None
+        try:
+            torch.cuda.empty_cache()
+    
+            if self.sam_net is not None:
+                del self.sam_net
+                self.sam_net = None
+                del self.predictor
+                self.predictor = None
+        except:
+            pass
 
     def undrawAll(self):
 
