@@ -589,10 +589,13 @@ class SAMPredictor(Tool):
         """
         Reset the network
         """
-        torch.cuda.empty_cache()
-        if self.sampredictor_net is not None:
-            del self.sampredictor_net
-            self.sampredictor_net = None
+        try:
+            torch.cuda.empty_cache()
+            if self.sampredictor_net is not None:
+                del self.sampredictor_net
+                self.sampredictor_net = None
+        except:
+            pass
 
     def resetWorkArea(self):
         """
