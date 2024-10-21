@@ -420,10 +420,13 @@ class Ritm(Tool):
         """
 
         """
-        torch.cuda.empty_cache()
-        if self.ritm_net is not None:
-            del self.ritm_net
-            self.ritm_net = None
+        try:
+            torch.cuda.empty_cache()
+            if self.ritm_net is not None:
+                del self.ritm_net
+                self.ritm_net = None
+        except:
+            pass
 
     def resetWorkArea(self):
         """
