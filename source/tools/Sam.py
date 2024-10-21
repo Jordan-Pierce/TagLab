@@ -100,15 +100,15 @@ class Sam(Tool):
 
 
     def reset(self):
-
-        torch.cuda.empty_cache()
-        if self.sam_net is not None:
-            del self.sam_net
-            self.sam_net = None
-        #     #self.viewerplus.resetTools()
-        #     ##self.resetWorkArea()
-
-
+        try:
+            torch.cuda.empty_cache()
+            if self.sam_net is not None:
+                del self.sam_net
+                self.sam_net = None
+            #     #self.viewerplus.resetTools()
+            #     ##self.resetWorkArea()
+        except:
+            pass
 
     def leftPressed(self, x, y, mods):
         self.segment()
