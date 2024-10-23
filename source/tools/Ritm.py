@@ -208,43 +208,46 @@ class Ritm(Tool):
         nclicks = self.points.nclicks()
         validArea = True
 
-        if nclicks == 1 and self.work_area_bbox[2] == 0 and self.work_area_bbox[3] == 0:
-            # the work area is assigned as the input image of the network
-            validArea = self.initializeWorkArea()
-
-        # init mask
-        if nclicks == 1 and len(self.viewerplus.selected_blobs) > 0:
-            if self.blob_to_correct is None:
-                self.blob_to_correct = self.viewerplus.selected_blobs[0]
-                self.viewerplus.resetSelection()
-                self.viewerplus.undrawBlob(self.blob_to_correct)  # removeBlob(self.blob_to_correct)
-                if self.work_area_mask is not None:
-                    paintMask(self.work_area_mask, self.work_area_bbox, self.blob_to_correct.getMask(),
-                              self.blob_to_correct.bbox, 0)
-
-            mask = self.blob_to_correct.getMask()
-
-            self.init_mask = np.zeros((self.work_area_bbox[3], self.work_area_bbox[2]), dtype=np.int32)
-            paintMask(self.init_mask, self.work_area_bbox, mask, self.blob_to_correct.bbox, 1)
-            self.init_mask = self.init_mask.astype(np.float32)
-            self.init_mask = torch.from_numpy(self.init_mask).unsqueeze(0).unsqueeze(0)
-            self.init_mask = self.init_mask.to(self.device)
-        else:
-            self.init_mask = None
-
-        # create clicks
-        self.clicker.reset_clicks()
-        for point in self.points.positive_points:
-            x = point[0] - self.work_area_bbox[1]
-            y = point[1] - self.work_area_bbox[0]
-            click = clicker.Click(is_positive=True, coords=(y, x))
-            self.clicker.add_click(click)
-
-        for point in self.points.negative_points:
-            x = point[0] - self.work_area_bbox[1]
-            y = point[1] - self.work_area_bbox[0]
-            click = clicker.Click(is_positive=False, coords=(y, x))
-            self.clicker.add_click(click)
+        try:
+            if nclicks == 1 and self.work_area_bbox[2] == 0 and self.work_area_bbox[3] == 0:
+                # the work area is assigned as the input image of the network
+                validArea = self.initializeWorkArea()
+    
+            # init mask
+            if nclicks == 1 and len(self.viewerplus.selected_blobs) > 0:
+                if self.blob_to_correct is None:
+                    self.blob_to_correct = self.viewerplus.selected_blobs[0]
+                    self.viewerplus.resetSelection()
+                    self.viewerplus.undrawBlob(self.blob_to_correct)  # removeBlob(self.blob_to_correct)
+                    if self.work_area_mask is not None:
+                        paintMask(self.work_area_mask, self.work_area_bbox, self.blob_to_correct.getMask(),
+                                  self.blob_to_correct.bbox, 0)
+    
+                mask = self.blob_to_correct.getMask()
+    
+                self.init_mask = np.zeros((self.work_area_bbox[3], self.work_area_bbox[2]), dtype=np.int32)
+                paintMask(self.init_mask, self.work_area_bbox, mask, self.blob_to_correct.bbox, 1)
+                self.init_mask = self.init_mask.astype(np.float32)
+                self.init_mask = torch.from_numpy(self.init_mask).unsqueeze(0).unsqueeze(0)
+                self.init_mask = self.init_mask.to(self.device)
+            else:
+                self.init_mask = None
+    
+            # create clicks
+            self.clicker.reset_clicks()
+            for point in self.points.positive_points:
+                x = point[0] - self.work_area_bbox[1]
+                y = point[1] - self.work_area_bbox[0]
+                click = clicker.Click(is_positive=True, coords=(y, x))
+                self.clicker.add_click(click)
+    
+            for point in self.points.negative_points:
+                x = point[0] - self.work_area_bbox[1]
+                y = point[1] - self.work_area_bbox[0]
+                click = clicker.Click(is_positive=False, coords=(y, x))
+                self.clicker.add_click(click)
+        except Exception as e:
+            validArea = None
 
         return validArea
 
