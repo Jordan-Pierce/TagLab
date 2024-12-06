@@ -3,7 +3,7 @@
 #
 # Copyright(C) 2019                                         
 # Visual Computing Lab                                           
-# ISTI - Italian National Research Council                              
+# ISTI - Italian National Research Council                               
 # All rights reserved.                                                      
                                                                           
 # This program is free software; you can redistribute it and/or modify      
