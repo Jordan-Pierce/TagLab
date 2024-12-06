@@ -210,11 +210,14 @@ for package in install_requires:
         print(f"If you're not already, please try using a conda environment with python 3.8")
         sys.exit(1)
 
-
-# Setting Torch, Torchvision versions
-list_args = [sys.executable, "-m", "pip", "install", torch_package, torchvision_package]
-if torch_extra_argument1 != "":
-    list_args.extend([torch_extra_argument1, torch_extra_argument2])
+try:
+    import torch
+    import torchvision
+except Exception:
+    # Setting Torch, Torchvision versions
+    list_args = [sys.executable, "-m", "pip", "install", torch_package, torchvision_package]
+    if torch_extra_argument1 != "":
+        list_args.extend([torch_extra_argument1, torch_extra_argument2])
 
 # Installing Torch, Torchvision
 subprocess.check_call(list_args)
