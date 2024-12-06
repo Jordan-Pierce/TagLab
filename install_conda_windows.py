@@ -219,8 +219,8 @@ except Exception:
     if torch_extra_argument1 != "":
         list_args.extend([torch_extra_argument1, torch_extra_argument2])
 
-# Installing Torch, Torchvision
-subprocess.check_call(list_args)
+    # Installing Torch, Torchvision
+    subprocess.check_call(list_args)
 
 # ----------------------------------------------
 # GDAL Version
