@@ -308,19 +308,25 @@ class Ritm(Tool):
             model_name = 'ritm_corals.pth'
             model_path = os.path.join(os.path.join(self.viewerplus.taglab_dir, "models"), model_name)
 
-            if not torch.cuda.is_available():
-                print("CUDA NOT AVAILABLE!")
-                device = torch.device("cpu")
-            else:
+            if torch.cuda.is_available():
                 device = torch.device("cuda:0")
+            elif torch.backends.mps.is_available():
+                if torch.backends.mps.is_built():
+                    device = torch.device("mps")
+                else:
+                    device = torch.device("cpu")
+                    print("MPS NOT AVAILABLE!")
+            else:
+                device = torch.device("cpu")
+                print("CUDA OR MPS NOT AVAILABLE!")
 
             self.device = device
 
             try:
-                self.ritm_net = ritmutils.load_is_model(model_path, device, cpu_dist_maps=False)
+                self.ritm_net = ritmutils.load_is_model(model_path, self.device, cpu_dist_maps=False)
                 self.ritm_net.to(device)
                 # initialize predictor
-                self.predictor = get_predictor(self.ritm_net, device=device, **self.predictor_params)
+                self.predictor = get_predictor(self.ritm_net, device=self.device, **self.predictor_params)
 
             except Exception as e:
                 box = QMessageBox()
@@ -332,12 +338,16 @@ class Ritm(Tool):
 
     def resetNetwork(self):
         try:
-            torch.cuda.empty_cache()
+            if 'cuda' in str(self.device):
+                torch.cuda.empty_cache()
+            elif 'mps' in str(self.device):
+                torch.mps.empty_cache()
+        except:
+            pass  # Do nothing
+        finally:
             if self.ritm_net is not None:
                 del self.ritm_net
                 self.ritm_net = None
-        except:
-            pass
 
     def apply(self):
         """
