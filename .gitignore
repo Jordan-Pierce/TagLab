@@ -161,3 +161,5 @@ cython_debug/
 .idea
 
 sampleProjects
+.vscode/launch.json
+.vscode/settings.json

@@ -335,7 +335,8 @@ class QtiViewWidget(QWidget):
         self.graphicsView.mouseReleaseEvent = self.mouse_release_event
 
         # Store the original center point for rotation
-        self.original_center = QPoint(self.iViewWidth / 2, self.iViewHeight / 2)
+        # Use integer division to pass ints to QPoint (QPoint expects ints)
+        self.original_center = QPoint(self.iViewWidth // 2, self.iViewHeight // 2)
 
         # Initial zoom factor
         self.zoom_factor = 1.0
@@ -505,6 +506,18 @@ class QtiViewWidget(QWidget):
         # Stores the chunks in global variable
         self.metashapeChunks = self.metashapeProject.chunks
 
+        # Debug: print chunks and their transforms
+        try:
+            print(f"[iView DEBUG] Loaded {len(self.metashapeChunks)} chunks from project")
+            for i, chunk in enumerate(self.metashapeChunks):
+                try:
+                    print(f"[iView DEBUG] Chunk {i}: label={getattr(chunk, 'label', None)}")
+                    print("[iView DEBUG] Chunk transform matrix:\n", chunk.transform.matrix)
+                except Exception as e:
+                    print(f"[iView DEBUG] Chunk {i}: label={getattr(chunk, 'label', None)}, transform unavailable: {e}")
+        except Exception as e:
+            print(f"[iView DEBUG] Error listing chunks: {e}")
+
         if len(self.metashapeChunks) == 0:
             raise Exception("No Chunks found in Project")
 
@@ -532,6 +545,23 @@ class QtiViewWidget(QWidget):
             if len(self.metashapeChunks) != 0:
                 # Updates the global variable
                 self.metashapeChunk = self.metashapeChunks[index]
+
+                # Debug: print selected chunk info
+                try:
+                    print(f"[iView DEBUG] Selected chunk index={index}, label={getattr(self.metashapeChunk, 'label', None)}")
+                    print("[iView DEBUG] Selected chunk transform matrix:\n", self.metashapeChunk.transform.matrix)
+                except Exception as e:
+                    print(f"[iView DEBUG] Selected chunk transform unavailable: {e}")
+
+                # DEM presence
+                try:
+                    if self.metashapeChunk.elevation:
+                        print("[iView DEBUG] Chunk has elevation/DEM object:", self.metashapeChunk.elevation)
+                    else:
+                        print("[iView DEBUG] Chunk has NO elevation/DEM")
+                except Exception:
+                    print("[iView DEBUG] Could not determine chunk elevation")
+
                 # Updates what is seen in combobox
                 self.loadOrthomosaicComboBox()
                 # Updates thumbnails based on images in new chunk
@@ -552,6 +582,25 @@ class QtiViewWidget(QWidget):
         """
         # Stores the orthomosaics in global variable
         self.metashapeOrthomosaics = self.metashapeChunk.orthomosaics
+
+        # Debug: print orthomosaic info
+        try:
+            print(f"[iView DEBUG] Found {len(self.metashapeOrthomosaics)} orthomosaics in chunk {getattr(self.metashapeChunk, 'label', None)}")
+            for i, orthomosaic in enumerate(self.metashapeOrthomosaics):
+                try:
+                    print(f"[iView DEBUG] Ortho {i}: width={getattr(orthomosaic,'width',None)}, height={getattr(orthomosaic,'height',None)}, left={getattr(orthomosaic,'left',None)}, top={getattr(orthomosaic,'top',None)}, resolution={getattr(orthomosaic,'resolution',None)}")
+                    try:
+                        print("[iView DEBUG] Ortho CRS:", getattr(getattr(orthomosaic,'crs',None),'name',None))
+                    except Exception:
+                        pass
+                    try:
+                        print("[iView DEBUG] Ortho projection matrix:\n", orthomosaic.projection.matrix)
+                    except Exception:
+                        pass
+                except Exception as e:
+                    print(f"[iView DEBUG] Error printing orthomosaic {i}: {e}")
+        except Exception as e:
+            print(f"[iView DEBUG] Error listing orthomosaics: {e}")
 
         if len(self.metashapeOrthomosaics) == 0:
             raise Exception("No Orthomosaics found in Chunk")
@@ -660,6 +709,26 @@ class QtiViewWidget(QWidget):
         T = self.metashapeChunk.transform.matrix
         orthomosaic = self.metashapeOrthomosaic
 
+        # Debug: print orthomosaic, DEM and chunk transform details
+        try:
+            print(f"[iView DEBUG] findClosestImage called with x={x}, y={y}, width={width}, height={height}")
+            print("[iView DEBUG] Chunk transform matrix T:\n", T)
+        except Exception as e:
+            print(f"[iView DEBUG] Error printing chunk transform: {e}")
+
+        try:
+            print(f"[iView DEBUG] Ortho: width={getattr(orthomosaic,'width',None)}, height={getattr(orthomosaic,'height',None)}, left={getattr(orthomosaic,'left',None)}, top={getattr(orthomosaic,'top',None)}, resolution={getattr(orthomosaic,'resolution',None)}")
+            try:
+                print("[iView DEBUG] Ortho CRS:", getattr(getattr(orthomosaic,'crs',None),'name',None))
+            except Exception:
+                pass
+            try:
+                print("[iView DEBUG] Ortho projection matrix:\n", orthomosaic.projection.matrix)
+            except Exception:
+                pass
+        except Exception as e:
+            print(f"[iView DEBUG] Error printing orthomosaic attributes: {e}")
+
         # For some reason, Metashape Orthomosaic might be off by a few pixels compared
         # to the version that was exported... Using delta for those cases (figure out later)
         delta = 5
@@ -682,6 +751,15 @@ class QtiViewWidget(QWidget):
             # Using the DEM as a surface
             # TODO Use the DEM (and Ortho) from viewerplus instead?
             dem = self.metashapeChunk.elevation
+            try:
+                print("[iView DEBUG] DEM object:", dem)
+                try:
+                    print("[iView DEBUG] DEM attributes: width=", getattr(dem,'width',None), "height=", getattr(dem,'height',None), "crs=", getattr(getattr(dem,'crs',None),'name',None))
+                except Exception:
+                    pass
+
+            except Exception as e:
+                print(f"[iView DEBUG] Error printing DEM info: {e}")
             # Altitude in dem.crs (supposing dem.crs  = ortho.crs)
             Z = dem.altitude(Metashape.Vector((X, Y)))
             # X, Y, Z  point p 3D coordinates  in ortho CS
@@ -691,6 +769,10 @@ class QtiViewWidget(QWidget):
             else:
                 # point p in internal coordinate system (no obstruction test without depth maps)
                 p = T.inv().mulp(orthomosaic.crs.unproject(Metashape.Vector((X, Y, Z))))
+
+            print(f"[iView DEBUG] Point p in ortho pixel coordinates: ({x}, {y})")
+            print("[iView DEBUG] Point p in ortho CS:", X, Y, Z)
+            print("[iView DEBUG] Point p in internal coordinate system:", p)
         else:
             QApplication.restoreOverrideCursor()
             msgBox = QMessageBox()
@@ -701,21 +783,23 @@ class QtiViewWidget(QWidget):
         for camera in self.metashapeChunk.cameras:
 
             try:
+                # Project the point into the camera once (cache result)
+                proj = camera.project(p)
                 # If the point doesn't project, skip
-                if not camera.project(p):
+                if not proj:
                     continue
 
-                u = camera.project(p).x  # u pixel coordinates in camera
-                v = camera.project(p).y  # v pixel coordinates in camera
+                u = proj.x  # u pixel coordinates in camera
+                v = proj.y  # v pixel coordinates in camera
 
                 # Failed the first test, in that the point in not in the image at all
-                if u < 0 or u > camera.sensor.width or v < 0 or v > camera.sensor.height:
+                if u < 0 or u > getattr(getattr(camera, 'sensor', None), 'width', float('inf')) or v < 0 or v > getattr(getattr(camera, 'sensor', None), 'height', float('inf')):
                     continue
 
                 dist = self.distance(camera.center, p)
                 positions.append([camera, u, v, dist])
 
-            except:
+            except Exception:
                 pass
 
         # Contains **all** cameras that have the view
@@ -994,8 +1078,8 @@ class QtiViewWidget(QWidget):
         """
         # Always deactivate after script regardless
         try:
-            print("NOTE: Deactivating License...")
-            Metashape.License().deactivate()
+            print("NOTE: Not Deactivating License...")
+            # Metashape.License().deactivate()
         except:
             pass
 
